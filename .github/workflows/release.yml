@@ -1,0 +1,71 @@
+name: Private Composer release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer release without or with a leading v
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: seviaflow/api
+      RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+      HUB_UPLOAD_URL: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_URL }}
+      HUB_UPLOAD_USERNAME: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_USERNAME }}
+      HUB_UPLOAD_PASSWORD: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate tag and manifest
+        run: |
+          set -eu
+          version="${RELEASE_VERSION#v}"
+          printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'
+          composer validate --strict
+          jq -e --arg version "$version" 'select(.name == "seviaflow/api") | .version = $version' composer.json >/dev/null
+
+      - name: Build clean release archive
+        run: |
+          set -eu
+          version="${RELEASE_VERSION#v}"
+          mkdir -p build
+          mkdir -p build/package
+          git archive --format=tar "$GITHUB_SHA" | tar -x -C build/package
+          jq --arg version "$version" '.version = $version' composer.json > build/package/composer.json
+          (cd build/package && zip -qr "$GITHUB_WORKSPACE/seviaflow-api-$version.zip" .)
+          sha256sum "$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
+          jq -c --arg version "$version" '{name, version: $version, type, license, require, autoload, extra, "require-dev": .["require-dev"], "autoload-dev": .["autoload-dev"], conflict, provide, replace, suggest}' composer.json > build/composer-manifest.json
+
+      - name: Upload immutable release draft to Hub
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          set -eu
+          version="${VERSION#v}"
+          archive="$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
+          manifest="$(cat build/composer-manifest.json)"
+          hash="$(sha256sum "$archive" | cut -d' ' -f1)"
+          curl --fail-with-body --silent --show-error --retry 2 \
+            --user "$HUB_UPLOAD_USERNAME:$HUB_UPLOAD_PASSWORD" \
+            -F "package_name=$PACKAGE_NAME" \
+            -F "version=$version" \
+            -F 'channel=stable' \
+            -F "reference=$GITHUB_SHA" \
+            -F "artifact_hash=$hash" \
+            -F "composer_manifest=$manifest" \
+            -F "artifact=@$archive;type=application/zip" \
+            "$HUB_UPLOAD_URL"
