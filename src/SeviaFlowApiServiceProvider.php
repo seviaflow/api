@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SeviaFlow\Api;
 
 use Illuminate\Support\ServiceProvider;
+use SeviaFlow\Api\Http\Middleware\RequireApiLicense;
 use SeviaFlow\Api\OpenApi\OpenApiCache;
 use SeviaFlow\Api\OpenApi\OpenApiGenerator;
 use SeviaFlow\Api\Support\Cache\OpenApiCacheParticipant;
@@ -24,6 +25,7 @@ final class SeviaFlowApiServiceProvider extends ServiceProvider
 
     public function boot(CapabilityRegistry $capabilities): void
     {
+        $this->app->make('router')->aliasMiddleware('seviaflow.api.license', RequireApiLicense::class);
         $capabilities->register('api', (bool) config('seviaflow-api.enabled', true), 'Headless REST API');
         $capabilities->register('openapi', (bool) config('seviaflow-api.openapi.enabled', true), 'OpenAPI schema generation');
 

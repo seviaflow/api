@@ -27,7 +27,7 @@ $resolveApiMiddleware = static function (): array {
 if ((bool) config('seviaflow-api.enabled', true)) {
     Route::prefix((string) config('seviaflow-api.prefix', 'api/admin'))
         ->as($routeNamePrefix)
-        ->middleware($resolveApiMiddleware())
+        ->middleware(array_merge($resolveApiMiddleware(), ['seviaflow.api.license']))
         ->group(function (): void {
             Route::get('/resources/{resource}', [ResourceController::class, 'index'])
                 ->name('resources.index');
@@ -55,7 +55,7 @@ if ((bool) config('seviaflow-api.openapi.enabled', true)) {
 
     Route::prefix((string) config('seviaflow-api.prefix', 'api/admin'))
         ->as($routeNamePrefix)
-        ->middleware($resolvedDocsMiddleware)
+        ->middleware(array_merge($resolvedDocsMiddleware, ['seviaflow.api.license']))
         ->group(function () use ($docsRoute): void {
             Route::get('/'.$docsRoute, static function (): JsonResponse {
                 return response()->json(app(OpenApiCache::class)->generate());
@@ -72,7 +72,7 @@ if ((bool) config('seviaflow-api.docs.enabled', true)) {
 
     Route::prefix((string) config('seviaflow-api.prefix', 'api/admin'))
         ->as($routeNamePrefix)
-        ->middleware($resolvedDocsMiddleware)
+        ->middleware(array_merge($resolvedDocsMiddleware, ['seviaflow.api.license']))
         ->group(function () use ($docsRoute): void {
             Route::view('/'.$docsRoute, (string) config('seviaflow-api.docs.view', 'seviaflow-api::api-docs'))
                 ->name('docs');

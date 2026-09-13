@@ -7,6 +7,10 @@ return [
     'prefix' => 'api/admin',
     'middleware' => ['api', 'auth:sanctum'],
     'route_name_prefix' => 'seviaflow.api.',
+    'licensing' => [
+        'enforce' => (bool) env('SEVIAFLOW_API_LICENSE_ENFORCE', true),
+        'product' => 'api',
+    ],
     'openapi' => [
         'enabled' => true,
         'route' => 'openapi.json',
