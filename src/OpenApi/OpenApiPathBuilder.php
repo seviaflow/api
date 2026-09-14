@@ -28,35 +28,37 @@ final class OpenApiPathBuilder
         $flowPath = '/'.$prefix.'/resources/'.$slug.'/{record}/flow';
         $flowExecutePath = '/'.$prefix.'/resources/'.$slug.'/{record}/flow/{transition}';
 
-        $paths[$resourcePath]['get'] = [
-            'tags' => [$tag],
-            'operationId' => $this->operationId($slug, 'index'),
-            'security' => [['bearerAuth' => []]],
-            'parameters' => [
-                ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer']],
-                ['name' => 'per_page', 'in' => 'query', 'schema' => ['type' => 'integer']],
-                ['name' => 'search', 'in' => 'query', 'schema' => ['type' => 'string']],
-                ['name' => 'sort', 'in' => 'query', 'schema' => ['type' => 'string']],
-                ['name' => 'direction', 'in' => 'query', 'schema' => ['type' => 'string']],
-            ],
-            'responses' => [
-                '200' => [
-                    'description' => 'OK',
-                    'content' => [
-                        'application/json' => [
-                            'schema' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'data' => [
-                                        'type' => 'array',
-                                        'items' => $this->resourceObjectSchema($api->getReadableFields()),
-                                    ],
-                                    'meta' => [
-                                        'type' => 'object',
-                                        'properties' => [
-                                            'current_page' => ['type' => 'integer'],
-                                            'per_page' => ['type' => 'integer'],
-                                            'total' => ['type' => 'integer'],
+        if ($api->isReadable()) {
+            $paths[$resourcePath]['get'] = [
+                'tags' => [$tag],
+                'operationId' => $this->operationId($slug, 'index'),
+                'security' => [['bearerAuth' => []]],
+                'parameters' => [
+                    ['name' => 'page', 'in' => 'query', 'schema' => ['type' => 'integer']],
+                    ['name' => 'per_page', 'in' => 'query', 'schema' => ['type' => 'integer']],
+                    ['name' => 'search', 'in' => 'query', 'schema' => ['type' => 'string']],
+                    ['name' => 'sort', 'in' => 'query', 'schema' => ['type' => 'string']],
+                    ['name' => 'direction', 'in' => 'query', 'schema' => ['type' => 'string']],
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'OK',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'data' => [
+                                            'type' => 'array',
+                                            'items' => $this->resourceObjectSchema($api->getReadableFields()),
+                                        ],
+                                        'meta' => [
+                                            'type' => 'object',
+                                            'properties' => [
+                                                'current_page' => ['type' => 'integer'],
+                                                'per_page' => ['type' => 'integer'],
+                                                'total' => ['type' => 'integer'],
+                                            ],
                                         ],
                                     ],
                                 ],
@@ -64,10 +66,10 @@ final class OpenApiPathBuilder
                         ],
                     ],
                 ],
-            ],
-        ];
+            ];
+        }
 
-        if ($api->getCreatableFields() !== []) {
+        if ($api->isCreatable()) {
             $paths[$resourcePath]['post'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'store'),
@@ -98,31 +100,33 @@ final class OpenApiPathBuilder
             ];
         }
 
-        $paths[$recordPath]['get'] = [
-            'tags' => [$tag],
-            'operationId' => $this->operationId($slug, 'show'),
-            'security' => [['bearerAuth' => []]],
-            'parameters' => [
-                ['name' => 'record', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']],
-            ],
-            'responses' => [
-                '200' => [
-                    'description' => 'OK',
-                    'content' => [
-                        'application/json' => [
-                            'schema' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'data' => $this->resourceObjectSchema($api->getReadableFields()),
+        if ($api->isReadable()) {
+            $paths[$recordPath]['get'] = [
+                'tags' => [$tag],
+                'operationId' => $this->operationId($slug, 'show'),
+                'security' => [['bearerAuth' => []]],
+                'parameters' => [
+                    ['name' => 'record', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'string']],
+                ],
+                'responses' => [
+                    '200' => [
+                        'description' => 'OK',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'data' => $this->resourceObjectSchema($api->getReadableFields()),
+                                    ],
                                 ],
                             ],
                         ],
                     ],
                 ],
-            ],
-        ];
+            ];
+        }
 
-        if ($api->getUpdatableFields() !== []) {
+        if ($api->isUpdatable()) {
             $paths[$recordPath]['patch'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'update'),
@@ -156,7 +160,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->isDeletable()) {
+        if ($api->allowsDelete()) {
             $paths[$recordPath]['delete'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'destroy'),
@@ -170,7 +174,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->isFlowEnabled()) {
+        if ($api->allowsFlow()) {
             $flowTag = $tag.' Flow';
             $paths[$flowPath]['get'] = [
                 'tags' => [$flowTag],

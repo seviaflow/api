@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
 use LogicException;
-use SeviaFlow\Core\Resources\ResourceAuthorization;
 use SeviaFlow\Core\Resources\Workflows\State;
 use SeviaFlow\Core\Resources\Workflows\Transition;
 use SeviaFlow\Core\Resources\Workflows\Workflow;
@@ -24,7 +23,8 @@ final class ApiFlowResponder
         private readonly WorkflowTransitionResolver $workflowTransitionResolver = new WorkflowTransitionResolver,
         private readonly WorkflowTransitionExecutor $workflowTransitionExecutor = new WorkflowTransitionExecutor,
         private readonly ApiRecordResolver $recordResolver = new ApiRecordResolver,
-        private readonly ApiErrorResponder $errorResponder = new ApiErrorResponder
+        private readonly ApiErrorResponder $errorResponder = new ApiErrorResponder,
+        private readonly ApiAuthorization $authorization = new ApiAuthorization
     ) {}
 
     /**
@@ -41,7 +41,7 @@ final class ApiFlowResponder
             abort(404);
         }
 
-        if (! ResourceAuthorization::for($resourceClass)->canView($this->actor($request), $found)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'view', $found)) {
             abort(403);
         }
 
@@ -85,7 +85,7 @@ final class ApiFlowResponder
             abort(404);
         }
 
-        if (! ResourceAuthorization::for($resourceClass)->canUpdate($this->actor($request), $found)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'update', $found)) {
             abort(403);
         }
 

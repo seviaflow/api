@@ -9,14 +9,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use SeviaFlow\Api\ApiResourceSerializer;
-use SeviaFlow\Core\Resources\ResourceAuthorization;
 use SeviaFlow\Core\Resources\Table;
 use SeviaFlow\Core\Tables\ResourceTableQuery;
 
 final class ApiIndexResponder
 {
     public function __construct(
-        private readonly ApiResourceSerializer $serializer = new ApiResourceSerializer
+        private readonly ApiResourceSerializer $serializer = new ApiResourceSerializer,
+        private readonly ApiAuthorization $authorization = new ApiAuthorization
     ) {}
 
     /**
@@ -24,8 +24,7 @@ final class ApiIndexResponder
      */
     public function respond(Request $request, string $resourceClass): JsonResponse
     {
-        $user = $request->user();
-        if (! ResourceAuthorization::for($resourceClass)->canViewAny($user)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'viewAny')) {
             abort(403);
         }
 

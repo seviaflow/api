@@ -22,55 +22,55 @@ final class ResourceController
 
     public function index(Request $request, string $resource): JsonResponse
     {
-        $resourceClass = $this->resourceResolver->resolveApiResource($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'index');
 
         return $this->indexResponder->respond($request, $resourceClass);
     }
 
     public function show(Request $request, string $resource, int|string $record): JsonResponse
     {
-        $resourceClass = $this->resourceResolver->resolveApiResource($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'show');
 
         return $this->crudResponder->show($request, $resourceClass, $record);
     }
 
     public function store(Request $request, string $resource): JsonResponse
     {
-        $resourceClass = $this->resourceResolver->resolveApiResource($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'store');
 
         return $this->crudResponder->store($request, $resourceClass, $resource);
     }
 
     public function update(Request $request, string $resource, int|string $record): JsonResponse
     {
-        $resourceClass = $this->resourceResolver->resolveApiResource($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'update');
 
         return $this->crudResponder->update($request, $resourceClass, $resource, $record);
     }
 
     public function destroy(Request $request, string $resource, int|string $record): JsonResponse
     {
-        [$resourceClass, $api] = $this->resourceResolver->resolveApiResourceWithDefinition($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'destroy');
 
-        return $this->crudResponder->destroy($request, $resourceClass, $resource, $api->isDeletable(), $record);
+        return $this->crudResponder->destroy($request, $resourceClass, $resource, true, $record);
     }
 
     public function flow(Request $request, string $resource, int|string $record): JsonResponse
     {
-        [$resourceClass, $api] = $this->resourceResolver->resolveApiResourceWithDefinition($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'flow');
 
-        return $this->flowResponder->flow($request, $resourceClass, $api->isEnabled(), $api->isFlowEnabled(), $record);
+        return $this->flowResponder->flow($request, $resourceClass, true, true, $record);
     }
 
     public function executeFlow(Request $request, string $resource, int|string $record, string $transition): JsonResponse
     {
-        [$resourceClass, $api] = $this->resourceResolver->resolveApiResourceWithDefinition($resource);
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'execute-flow');
 
         return $this->flowResponder->executeFlow(
             $request,
             $resourceClass,
-            $api->isEnabled(),
-            $api->isFlowEnabled(),
+            true,
+            true,
             $record,
             $transition
         );

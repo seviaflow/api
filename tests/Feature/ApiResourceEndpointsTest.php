@@ -33,6 +33,8 @@ beforeEach(function (): void {
         'api-event-records' => ApiEventRecordResource::class,
         'api-disabled-records' => ApiDisabledRecordResource::class,
         'api-non-deletable-records' => ApiNonDeletableRecordResource::class,
+        'api-empty-create-records' => ApiEmptyCreateRecordResource::class,
+        'api-empty-update-records' => ApiEmptyUpdateRecordResource::class,
         'api-soft-records' => ApiSoftDeleteRecordResource::class,
     ]);
 
@@ -383,6 +385,20 @@ it('delete is denied when api resource is not deletable', function (): void {
         ->assertNotFound();
 });
 
+it('create is unavailable when no creatable fields are declared', function (): void {
+    pest_test_case()->postJson('/api/admin/resources/api-empty-create-records', [
+        'name' => 'Not Created',
+    ])->assertNotFound();
+});
+
+it('update is unavailable when no updatable fields are declared', function (): void {
+    $record = ApiEndpointRecord::query()->create(['name' => 'Not Updated']);
+
+    pest_test_case()->patchJson('/api/admin/resources/api-empty-update-records/'.$record->getKey(), [
+        'name' => 'Changed',
+    ])->assertNotFound();
+});
+
 it('unauthorized create is denied', function (): void {
     config()->set('seviaflow.permissions.enabled', true);
     $user = ApiEndpointUser::query()->create(['name' => 'No Create']);
@@ -413,6 +429,28 @@ it('unauthorized delete is denied', function (): void {
 
     pest_test_case()->deleteJson('/api/admin/resources/api-enabled-records/'.$record->getKey())
         ->assertForbidden();
+});
+
+it('intersects resource authorization with a read-only token ability', function (): void {
+    $record = ApiEndpointRecord::query()->create(['name' => 'Token Read']);
+    $user = ApiTokenEndpointUser::query()->create(['name' => 'Token User']);
+    ApiTokenEndpointUser::$abilities = ['resources.read'];
+    pest_test_case()->actingAs($user, 'web');
+
+    pest_test_case()->getJson('/api/admin/resources/api-enabled-records/'.$record->getKey())
+        ->assertOk();
+    pest_test_case()->postJson('/api/admin/resources/api-enabled-records', [
+        'name' => 'Token Write Denied',
+        'email' => 'token-write-denied@example.com',
+    ])->assertForbidden();
+});
+
+it('denies a revoked token before resource execution', function (): void {
+    $user = ApiTokenEndpointUser::query()->create(['name' => 'Revoked Token User']);
+    ApiTokenEndpointUser::$abilities = [];
+    pest_test_case()->actingAs($user, 'web');
+
+    pest_test_case()->getJson('/api/admin/resources/api-enabled-records')->assertForbidden();
 });
 
 it('soft delete behavior is respected', function (): void {
@@ -648,6 +686,30 @@ final class ApiNonDeletableRecordResource extends Resource
     }
 }
 
+final class ApiEmptyCreateRecordResource extends Resource
+{
+    protected static string $model = ApiEndpointRecord::class;
+
+    public static function api(ApiResource $api): ApiResource
+    {
+        return $api
+            ->enabled()
+            ->readable(['id', 'name']);
+    }
+}
+
+final class ApiEmptyUpdateRecordResource extends Resource
+{
+    protected static string $model = ApiEndpointRecord::class;
+
+    public static function api(ApiResource $api): ApiResource
+    {
+        return $api
+            ->enabled()
+            ->readable(['id', 'name']);
+    }
+}
+
 final class ApiSoftDeleteRecordResource extends Resource
 {
     protected static string $model = ApiSoftRecord::class;
@@ -689,6 +751,25 @@ final class ApiEndpointUser extends AuthenticatableUser
     protected $table = 'users';
 
     protected $guarded = [];
+}
+
+final class ApiTokenEndpointUser extends AuthenticatableUser
+{
+    public static array $abilities = [];
+
+    protected $table = 'users';
+
+    protected $guarded = [];
+
+    public function currentAccessToken(): object
+    {
+        return new stdClass;
+    }
+
+    public function tokenCan(string $ability): bool
+    {
+        return in_array($ability, self::$abilities, true);
+    }
 }
 
 final class ApiEventTracker

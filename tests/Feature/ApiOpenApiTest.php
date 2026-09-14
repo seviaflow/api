@@ -20,6 +20,7 @@ beforeEach(function (): void {
     config()->set('seviaflow.resources', [
         'openapi-enabled' => OpenApiEnabledResource::class,
         'openapi-disabled' => OpenApiDisabledResource::class,
+        'openapi-empty-write' => OpenApiEmptyWriteResource::class,
         'openapi-flow' => OpenApiFlowResource::class,
     ]);
 
@@ -60,6 +61,14 @@ it('excludes disabled resources', function (): void {
 
     expect($response['paths'])->not->toHaveKey('/api/admin/resources/openapi-disabled')
         ->and($response['paths'])->not->toHaveKey('/api/admin/resources/openapi-disabled/{record}');
+});
+
+it('omits empty write operations from the openapi contract', function (): void {
+    $response = pest_test_case()->getJson('/api/admin/openapi.json')->assertOk()->json();
+
+    expect($response['paths']['/api/admin/resources/openapi-empty-write']['get'])->not->toBeNull()
+        ->and($response['paths']['/api/admin/resources/openapi-empty-write'])->not->toHaveKey('post')
+        ->and($response['paths']['/api/admin/resources/openapi-empty-write/{record}'])->not->toHaveKey('patch');
 });
 
 it('includes readable fields and excludes non readable fields in response schema', function (): void {
@@ -206,6 +215,18 @@ final class OpenApiEnabledResource extends Resource
 final class OpenApiDisabledResource extends Resource
 {
     protected static string $model = OpenApiRecord::class;
+}
+
+final class OpenApiEmptyWriteResource extends Resource
+{
+    protected static string $model = OpenApiRecord::class;
+
+    public static function api(ApiResource $api): ApiResource
+    {
+        return $api
+            ->enabled()
+            ->readable(['id', 'name']);
+    }
 }
 
 final class OpenApiFlowResource extends Resource

@@ -13,7 +13,6 @@ use InvalidArgumentException;
 use LogicException;
 use SeviaFlow\Api\ApiPayloadSanitizer;
 use SeviaFlow\Api\ApiResourceSerializer;
-use SeviaFlow\Core\Resources\ResourceAuthorization;
 use SeviaFlow\Core\Resources\ResourceEventContext;
 use SeviaFlow\Core\Resources\ResourceEventDispatcher;
 
@@ -24,7 +23,8 @@ final class ApiCrudResponder
         private readonly ApiPayloadSanitizer $payloadSanitizer = new ApiPayloadSanitizer,
         private readonly ApiRecordResolver $recordResolver = new ApiRecordResolver,
         private readonly ResourceEventDispatcher $resourceEventDispatcher = new ResourceEventDispatcher,
-        private readonly ApiErrorResponder $apiErrorResponder = new ApiErrorResponder
+        private readonly ApiErrorResponder $apiErrorResponder = new ApiErrorResponder,
+        private readonly ApiAuthorization $authorization = new ApiAuthorization
     ) {}
 
     /**
@@ -37,7 +37,7 @@ final class ApiCrudResponder
             abort(404);
         }
 
-        if (! ResourceAuthorization::for($resourceClass)->canView($this->actor($request), $found)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'view', $found)) {
             abort(403);
         }
 
@@ -51,7 +51,7 @@ final class ApiCrudResponder
      */
     public function store(Request $request, string $resourceClass, string $resourceSlug): JsonResponse
     {
-        if (! ResourceAuthorization::for($resourceClass)->canCreate($this->actor($request))) {
+        if (! $this->authorization->allows($request, $resourceClass, 'create')) {
             abort(403);
         }
 
@@ -82,7 +82,7 @@ final class ApiCrudResponder
             abort(404);
         }
 
-        if (! ResourceAuthorization::for($resourceClass)->canUpdate($this->actor($request), $found)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'update', $found)) {
             abort(403);
         }
 
@@ -117,7 +117,7 @@ final class ApiCrudResponder
             abort(404);
         }
 
-        if (! ResourceAuthorization::for($resourceClass)->canDelete($this->actor($request), $found)) {
+        if (! $this->authorization->allows($request, $resourceClass, 'delete', $found)) {
             abort(403);
         }
 
