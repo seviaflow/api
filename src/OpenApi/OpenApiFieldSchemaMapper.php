@@ -4,46 +4,42 @@ declare(strict_types=1);
 
 namespace SeviaFlow\Api\OpenApi;
 
+use InvalidArgumentException;
+use SeviaFlow\Core\Resources\Fields\Field;
+
 final class OpenApiFieldSchemaMapper
 {
     /**
      * @return array<string, mixed>
      */
-    public function map(string $field): array
+    public function map(string|Field $field, ?array $schema = null): array
     {
-        $normalized = strtolower($field);
+        if ($field instanceof Field) {
+            return $this->normalizeSchema($field->getSchema());
+        }
 
+        if ($schema !== null) {
+            return $this->normalizeSchema($schema);
+        }
+
+        $normalized = strtolower($field);
         if ($normalized === 'id' || str_ends_with($normalized, '_id')) {
             return ['type' => 'integer'];
         }
 
-        if (str_ends_with($normalized, '_at')) {
-            return ['type' => 'string', 'format' => 'date-time'];
-        }
-
-        if (str_contains($normalized, 'date') && ! str_contains($normalized, 'datetime')) {
-            return ['type' => 'string', 'format' => 'date'];
-        }
-
-        if (str_starts_with($normalized, 'is_') || str_starts_with($normalized, 'has_')) {
-            return ['type' => 'boolean'];
-        }
-
-        if (str_contains($normalized, 'count')
-            || str_contains($normalized, 'amount')
-            || str_contains($normalized, 'price')
-            || str_contains($normalized, 'total')
-            || str_contains($normalized, 'number')) {
-            return ['type' => 'number'];
-        }
-
-        if (str_ends_with($normalized, '_ids') || str_ends_with($normalized, '_list')) {
-            return [
-                'type' => 'array',
-                'items' => ['type' => 'string'],
-            ];
-        }
-
         return ['type' => 'string'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function normalizeSchema(array $schema): array
+    {
+        if (! isset($schema['type']) && ! isset($schema['oneOf']) && ! isset($schema['anyOf'])) {
+            throw new InvalidArgumentException('An API field schema must declare type, oneOf, or anyOf.');
+        }
+
+        return $schema;
     }
 }

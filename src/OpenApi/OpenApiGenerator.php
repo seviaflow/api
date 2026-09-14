@@ -6,6 +6,8 @@ namespace SeviaFlow\Api\OpenApi;
 
 use Illuminate\Support\Str;
 use SeviaFlow\Core\Resources\ApiResource;
+use SeviaFlow\Core\Resources\Fields\Field;
+use SeviaFlow\Core\Resources\Form;
 use SeviaFlow\Core\Resources\Resource;
 use SeviaFlow\Core\Resources\ResourceRegistry;
 
@@ -37,7 +39,8 @@ final class OpenApiGenerator
                 prefix: $prefix,
                 slug: $slug,
                 tag: $this->resourceLabel($slug, $resourceClass),
-                api: $api
+                api: $api,
+                fieldSchemas: $this->fieldSchemas($resourceClass),
             );
         }
 
@@ -81,5 +84,24 @@ final class OpenApiGenerator
         }
 
         return Str::of($slug)->replace('-', ' ')->headline()->toString();
+    }
+
+    /**
+     * @param  class-string<resource>  $resourceClass
+     * @return array<string, array<string, mixed>>
+     */
+    private function fieldSchemas(string $resourceClass): array
+    {
+        $schemas = [];
+
+        foreach ($resourceClass::form(new Form)->getAllFields() as $field) {
+            if (! $field instanceof Field) {
+                continue;
+            }
+
+            $schemas[$field->name()] = $field->getSchema();
+        }
+
+        return $schemas;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SeviaFlow\Api\OpenApi;
 
 use SeviaFlow\Core\Resources\ApiResource;
+use SeviaFlow\Core\Support\SensitiveDataPolicy;
 
 final class OpenApiPathBuilder
 {
@@ -21,14 +22,15 @@ final class OpenApiPathBuilder
         string $prefix,
         string $slug,
         string $tag,
-        ApiResource $api
+        ApiResource $api,
+        array $fieldSchemas = []
     ): array {
         $resourcePath = '/'.$prefix.'/resources/'.$slug;
         $recordPath = '/'.$prefix.'/resources/'.$slug.'/{record}';
         $flowPath = '/'.$prefix.'/resources/'.$slug.'/{record}/flow';
         $flowExecutePath = '/'.$prefix.'/resources/'.$slug.'/{record}/flow/{transition}';
 
-        if ($api->isReadable()) {
+        if ($api->allowsOperation('index')) {
             $paths[$resourcePath]['get'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'index'),
@@ -50,7 +52,7 @@ final class OpenApiPathBuilder
                                     'properties' => [
                                         'data' => [
                                             'type' => 'array',
-                                            'items' => $this->resourceObjectSchema($api->getReadableFields()),
+                                            'items' => $this->resourceObjectSchema($api->getReadableFields(), $api, $fieldSchemas, true),
                                         ],
                                         'meta' => [
                                             'type' => 'object',
@@ -69,7 +71,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->isCreatable()) {
+        if ($api->allowsOperation('store')) {
             $paths[$resourcePath]['post'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'store'),
@@ -78,7 +80,7 @@ final class OpenApiPathBuilder
                     'required' => true,
                     'content' => [
                         'application/json' => [
-                            'schema' => $this->writeSchema($api->getCreatableFields(), $api->getRequiredOnCreateFields()),
+                            'schema' => $this->writeSchema($api->getCreatableFields(), $api->getRequiredOnCreateFields(), $api, $fieldSchemas),
                         ],
                     ],
                 ],
@@ -90,7 +92,7 @@ final class OpenApiPathBuilder
                                 'schema' => [
                                     'type' => 'object',
                                     'properties' => [
-                                        'data' => $this->resourceObjectSchema($api->getReadableFields()),
+                                        'data' => $this->resourceObjectSchema($api->getReadableFields(), $api, $fieldSchemas, true),
                                     ],
                                 ],
                             ],
@@ -100,7 +102,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->isReadable()) {
+        if ($api->allowsOperation('show')) {
             $paths[$recordPath]['get'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'show'),
@@ -116,7 +118,7 @@ final class OpenApiPathBuilder
                                 'schema' => [
                                     'type' => 'object',
                                     'properties' => [
-                                        'data' => $this->resourceObjectSchema($api->getReadableFields()),
+                                        'data' => $this->resourceObjectSchema($api->getReadableFields(), $api, $fieldSchemas, true),
                                     ],
                                 ],
                             ],
@@ -126,7 +128,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->isUpdatable()) {
+        if ($api->allowsOperation('update')) {
             $paths[$recordPath]['patch'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'update'),
@@ -138,7 +140,7 @@ final class OpenApiPathBuilder
                     'required' => true,
                     'content' => [
                         'application/json' => [
-                            'schema' => $this->writeSchema($api->getUpdatableFields(), $api->getRequiredOnUpdateFields()),
+                            'schema' => $this->writeSchema($api->getUpdatableFields(), $api->getRequiredOnUpdateFields(), $api, $fieldSchemas),
                         ],
                     ],
                 ],
@@ -150,7 +152,7 @@ final class OpenApiPathBuilder
                                 'schema' => [
                                     'type' => 'object',
                                     'properties' => [
-                                        'data' => $this->resourceObjectSchema($api->getReadableFields()),
+                                        'data' => $this->resourceObjectSchema($api->getReadableFields(), $api, $fieldSchemas, true),
                                     ],
                                 ],
                             ],
@@ -160,7 +162,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->allowsDelete()) {
+        if ($api->allowsOperation('destroy')) {
             $paths[$recordPath]['delete'] = [
                 'tags' => [$tag],
                 'operationId' => $this->operationId($slug, 'destroy'),
@@ -174,7 +176,7 @@ final class OpenApiPathBuilder
             ];
         }
 
-        if ($api->allowsFlow()) {
+        if ($api->allowsOperation('flow')) {
             $flowTag = $tag.' Flow';
             $paths[$flowPath]['get'] = [
                 'tags' => [$flowTag],
@@ -187,7 +189,10 @@ final class OpenApiPathBuilder
                     '200' => ['description' => 'OK'],
                 ],
             ];
+        }
 
+        if ($api->allowsOperation('execute-flow')) {
+            $flowTag = $tag.' Flow';
             $paths[$flowExecutePath]['post'] = [
                 'tags' => [$flowTag],
                 'operationId' => $this->operationId($slug, 'flowExecute'),
@@ -216,6 +221,19 @@ final class OpenApiPathBuilder
             ];
         }
 
+        foreach ([$resourcePath, $recordPath, $flowPath, $flowExecutePath] as $path) {
+            foreach (array_keys($paths[$path] ?? []) as $method) {
+                if (! is_array($paths[$path][$method])) {
+                    continue;
+                }
+
+                $paths[$path][$method]['responses'] = array_replace(
+                    $this->commonErrorResponses(),
+                    $paths[$path][$method]['responses'] ?? []
+                );
+            }
+        }
+
         return $paths;
     }
 
@@ -228,12 +246,19 @@ final class OpenApiPathBuilder
      * @param  array<int, string>  $fields
      * @return array<string, mixed>
      */
-    private function resourceObjectSchema(array $fields): array
+    private function resourceObjectSchema(array $fields, ApiResource $api, array $fieldSchemas, bool $forResponse = false): array
     {
         $properties = [];
 
         foreach ($fields as $field) {
-            $properties[$field] = $this->fieldSchemaMapper->map($field);
+            $schema = $api->schemaFor($field) ?? ($fieldSchemas[$field] ?? null);
+            $schema ??= $this->fieldSchemaMapper->map($field);
+
+            if ($forResponse && (SensitiveDataPolicy::isSensitive($field) || (($schema['writeOnly'] ?? false) === true))) {
+                continue;
+            }
+
+            $properties[$field] = $this->fieldSchemaMapper->map($field, $schema);
         }
 
         return [
@@ -247,9 +272,9 @@ final class OpenApiPathBuilder
      * @param  array<int, string>  $required
      * @return array<string, mixed>
      */
-    private function writeSchema(array $fields, array $required): array
+    private function writeSchema(array $fields, array $required, ApiResource $api, array $fieldSchemas): array
     {
-        $schema = $this->resourceObjectSchema($fields);
+        $schema = $this->resourceObjectSchema($fields, $api, $fieldSchemas);
 
         if ($required !== []) {
             $schema['required'] = array_values(array_filter(
@@ -259,5 +284,33 @@ final class OpenApiPathBuilder
         }
 
         return $schema;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function commonErrorResponses(): array
+    {
+        $errorSchema = [
+            'type' => 'object',
+            'properties' => [
+                'message' => ['type' => 'string'],
+                'errors' => [
+                    'type' => 'object',
+                    'additionalProperties' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ];
+
+        return [
+            '401' => ['description' => 'Unauthenticated', 'content' => ['application/json' => ['schema' => $errorSchema]]],
+            '403' => ['description' => 'Forbidden', 'content' => ['application/json' => ['schema' => $errorSchema]]],
+            '404' => ['description' => 'Not found', 'content' => ['application/json' => ['schema' => $errorSchema]]],
+            '409' => ['description' => 'Conflict', 'content' => ['application/json' => ['schema' => $errorSchema]]],
+            '422' => ['description' => 'Validation error', 'content' => ['application/json' => ['schema' => $errorSchema]]],
+        ];
     }
 }

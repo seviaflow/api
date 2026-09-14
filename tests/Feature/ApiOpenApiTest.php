@@ -22,6 +22,7 @@ beforeEach(function (): void {
         'openapi-disabled' => OpenApiDisabledResource::class,
         'openapi-empty-write' => OpenApiEmptyWriteResource::class,
         'openapi-flow' => OpenApiFlowResource::class,
+        'explicit-schema' => ExplicitSchemaResource::class,
     ]);
 
     Schema::create('openapi_records', function (Blueprint $table): void {
@@ -120,6 +121,27 @@ it('includes bearer security scheme', function (): void {
         'type' => 'http',
         'scheme' => 'bearer',
     ]);
+});
+
+it('uses explicit schemas instead of field-name guesses', function (): void {
+    $response = pest_test_case()->getJson('/api/admin/openapi.json')->assertOk()->json();
+    $properties = $response['paths']['/api/admin/resources/explicit-schema/{record}']['get']['responses']['200']['content']['application/json']['schema']['properties']['data']['properties'];
+
+    expect($properties['uuid'])->toBe(['type' => 'string', 'format' => 'uuid'])
+        ->and($properties['invoice_number'])->toBe(['type' => 'string'])
+        ->and($properties['total'])->toBe(['type' => 'string', 'format' => 'decimal'])
+        ->and($properties['tags'])->toBe([
+            'type' => 'array',
+            'items' => ['type' => 'string'],
+        ]);
+});
+
+it('documents validation error paths for enabled write operations', function (): void {
+    $response = pest_test_case()->getJson('/api/admin/openapi.json')->assertOk()->json();
+    $responses = $response['paths']['/api/admin/resources/openapi-enabled']['post']['responses'];
+
+    expect($responses)->toHaveKeys(['401', '403', '409', '422'])
+        ->and($responses['422']['content']['application/json']['schema']['properties'])->toHaveKey('errors');
 });
 
 it('caches spec when openapi cache is enabled', function (): void {
@@ -239,6 +261,24 @@ final class OpenApiFlowResource extends Resource
             ->enabled()
             ->flow()
             ->readable(['id', 'status']);
+    }
+}
+
+final class ExplicitSchemaResource extends Resource
+{
+    protected static string $model = OpenApiRecord::class;
+
+    public static function api(ApiResource $api): ApiResource
+    {
+        return $api
+            ->enabled()
+            ->readable(['uuid', 'invoice_number', 'total', 'tags'])
+            ->schema([
+                'uuid' => ['type' => 'string', 'format' => 'uuid'],
+                'invoice_number' => ['type' => 'string'],
+                'total' => ['type' => 'string', 'format' => 'decimal'],
+                'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
+            ]);
     }
 }
 
