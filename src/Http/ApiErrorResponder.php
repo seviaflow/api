@@ -17,4 +17,14 @@ final class ApiErrorResponder
             ],
         ], 422);
     }
+
+    public function conflict(string $field, string $message): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'errors' => [
+                $field => [$message],
+            ],
+        ], 409);
+    }
 }

@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
 use LogicException;
+use SeviaFlow\Core\Exceptions\WorkflowTransitionConflictException;
 use SeviaFlow\Core\Resources\Workflows\State;
 use SeviaFlow\Core\Resources\Workflows\Transition;
 use SeviaFlow\Core\Resources\Workflows\Workflow;
@@ -131,6 +132,8 @@ final class ApiFlowResponder
                 ],
                 'message' => $transitionDefinition->getSuccessMessage() ?? 'Transition completed successfully.',
             ]);
+        } catch (WorkflowTransitionConflictException $exception) {
+            return $this->errorResponder->conflict('transition', $exception->getMessage());
         } catch (InvalidArgumentException|LogicException $exception) {
             return $this->errorResponder->validationError('transition', $exception->getMessage());
         } catch (Throwable $exception) {

@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace SeviaFlow\Api;
 
 use Illuminate\Validation\ValidationException;
-use SeviaFlow\Core\Resources\Resource;
-use SeviaFlow\Core\Resources\Workflows\Workflow;
+use SeviaFlow\Core\Exceptions\WorkflowStateMutationException;
+use SeviaFlow\Core\Workflows\WorkflowStateFieldGuard as CoreWorkflowStateFieldGuard;
 
 final class WorkflowStateFieldGuard
 {
+    public function __construct(
+        private readonly CoreWorkflowStateFieldGuard $coreGuard = new CoreWorkflowStateFieldGuard
+    ) {}
+
     /**
      * @param  class-string<resource>  $resourceClass
      * @param  array<int, string>  $fields
@@ -35,18 +39,15 @@ final class WorkflowStateFieldGuard
      */
     public function ensurePayloadDoesNotWriteStateField(string $resourceClass, array $payload): void
     {
-        $stateField = $this->resolvedStateField($resourceClass);
+        try {
+            $this->coreGuard->ensurePayloadDoesNotWriteStateField($resourceClass, $payload);
+        } catch (WorkflowStateMutationException $exception) {
+            $stateField = $this->resolvedStateField($resourceClass) ?? 'state';
 
-        if ($stateField === null || ! array_key_exists($stateField, $payload)) {
-            return;
+            throw ValidationException::withMessages([
+                $stateField => [$exception->getMessage()],
+            ]);
         }
-
-        throw ValidationException::withMessages([
-            $stateField => sprintf(
-                'The [%s] field is workflow-controlled and cannot be changed through this API.',
-                $stateField
-            ),
-        ]);
     }
 
     /**
@@ -54,12 +55,6 @@ final class WorkflowStateFieldGuard
      */
     private function resolvedStateField(string $resourceClass): ?string
     {
-        $workflow = $resourceClass::workflow(new Workflow);
-
-        if ($workflow->getStates() === [] && $workflow->getTransitions() === [] && $workflow->getInitialState() === null) {
-            return null;
-        }
-
-        return $workflow->getStateField();
+        return $this->coreGuard->stateField($resourceClass);
     }
 }

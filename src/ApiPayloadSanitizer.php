@@ -39,7 +39,7 @@ final class ApiPayloadSanitizer
         $this->ensureNoUnknownFields($payload, $allowed);
         $payload = $this->preparePayload($resourceClass, $payload);
         $this->validatePayload(
-            payload: $payload,
+            payload: $this->validationPayload($payload),
             rules: $this->apiValidationRules->forCreate($resourceClass, $record, $payload),
             attributes: $this->attributesFor($resourceClass, ResourceContext::Create, $allowed, $record, $api)
         );
@@ -64,10 +64,10 @@ final class ApiPayloadSanitizer
         $this->ensureNoUnknownFields($payload, $allowed);
         $payload = $this->preparePayload($resourceClass, $payload);
         $fieldValues = is_array($record?->getAttributes())
-            ? array_replace($record->getAttributes(), $payload)
-            : $payload;
+            ? array_replace($record->getAttributes(), $this->validationPayload($payload))
+            : $this->validationPayload($payload);
         $this->validatePayload(
-            payload: $payload,
+            payload: $this->validationPayload($payload),
             rules: $this->apiValidationRules->forUpdate(
                 resourceClass: $resourceClass,
                 record: $record,
@@ -150,6 +150,37 @@ final class ApiPayloadSanitizer
             $this->operationService->fieldsForResource($resourceClass, array_keys($payload)),
             $payload,
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function validationPayload(array $payload): array
+    {
+        foreach ($payload as $field => $value) {
+            if (in_array($value, ['retain', 'remove'], true)) {
+                $payload[$field] = null;
+
+                continue;
+            }
+
+            if (! is_array($value) || ! isset($value['action'])) {
+                continue;
+            }
+
+            if (in_array($value['action'], ['retain', 'remove'], true)) {
+                $payload[$field] = null;
+
+                continue;
+            }
+
+            if ($value['action'] === 'replace' && array_key_exists('file', $value)) {
+                $payload[$field] = $value['file'];
+            }
+        }
+
+        return $payload;
     }
 
     /**

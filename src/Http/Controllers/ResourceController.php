@@ -7,9 +7,11 @@ namespace SeviaFlow\Api\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use SeviaFlow\Api\Http\ApiCrudResponder;
+use SeviaFlow\Api\Http\ApiFileResponder;
 use SeviaFlow\Api\Http\ApiFlowResponder;
 use SeviaFlow\Api\Http\ApiIndexResponder;
 use SeviaFlow\Api\Http\ApiResourceResolver;
+use Symfony\Component\HttpFoundation\Response;
 
 final class ResourceController
 {
@@ -17,7 +19,8 @@ final class ResourceController
         private readonly ApiResourceResolver $resourceResolver = new ApiResourceResolver,
         private readonly ApiIndexResponder $indexResponder = new ApiIndexResponder,
         private readonly ApiCrudResponder $crudResponder = new ApiCrudResponder,
-        private readonly ApiFlowResponder $flowResponder = new ApiFlowResponder
+        private readonly ApiFlowResponder $flowResponder = new ApiFlowResponder,
+        private readonly ApiFileResponder $fileResponder = new ApiFileResponder
     ) {}
 
     public function index(Request $request, string $resource): JsonResponse
@@ -32,6 +35,13 @@ final class ResourceController
         $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'show');
 
         return $this->crudResponder->show($request, $resourceClass, $record);
+    }
+
+    public function file(Request $request, string $resource, int|string $record, string $field): Response
+    {
+        $resourceClass = $this->resourceResolver->resolveApiResourceForOperation($resource, 'file');
+
+        return $this->fileResponder->download($request, $resourceClass, $record, $field);
     }
 
     public function store(Request $request, string $resource): JsonResponse

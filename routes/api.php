@@ -40,6 +40,8 @@ if ((bool) config('seviaflow-api.enabled', true)) {
                 ->name('resources.store');
             Route::get('/resources/{resource}/{record}', [ResourceController::class, 'show'])
                 ->name('resources.show');
+            Route::get('/resources/{resource}/{record}/files/{field}', [ResourceController::class, 'file'])
+                ->name('resources.files.download');
             Route::get('/resources/{resource}/{record}/flow', [ResourceController::class, 'flow'])
                 ->name('resources.flow');
             Route::post('/resources/{resource}/{record}/flow/{transition}', [ResourceController::class, 'executeFlow'])

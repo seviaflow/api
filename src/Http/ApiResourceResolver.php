@@ -33,7 +33,7 @@ final class ApiResourceResolver
         [$resourceClass, $api] = $this->resolveApiResourceWithDefinition($resource);
 
         $allowed = match ($operation) {
-            'index', 'show' => $api->isReadable(),
+            'index', 'show', 'file' => $api->isReadable(),
             'store' => $api->isCreatable(),
             'update' => $api->isUpdatable(),
             'destroy' => $api->allowsDelete(),
