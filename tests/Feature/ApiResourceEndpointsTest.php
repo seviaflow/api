@@ -335,11 +335,22 @@ it('create enforces required fields', function (): void {
         ->assertJsonValidationErrors(['email']);
 });
 
-it('update enforces required fields', function (): void {
+it('allows partial update without unchanged required fields', function (): void {
     $record = ApiEndpointRecord::query()->create(['name' => 'Before', 'email' => 'before@example.com']);
 
     pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
         'company_id' => 123,
+    ])->assertOk()
+        ->assertJsonPath('data.company_id', 123);
+
+    expect($record->fresh()?->name)->toBe('Before');
+});
+
+it('rejects explicit null for required update field', function (): void {
+    $record = ApiEndpointRecord::query()->create(['name' => 'Before', 'email' => 'before@example.com']);
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'name' => null,
     ])->assertStatus(422)
         ->assertJsonValidationErrors(['name']);
 });

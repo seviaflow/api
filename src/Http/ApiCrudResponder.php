@@ -8,13 +8,17 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
 use SeviaFlow\Api\ApiPayloadSanitizer;
 use SeviaFlow\Api\ApiResourceSerializer;
+use SeviaFlow\Core\Operations\ResourceOperationContext;
+use SeviaFlow\Core\Operations\ResourceOperationService;
+use SeviaFlow\Core\Resources\Fields\Field;
+use SeviaFlow\Core\Resources\ResourceContext;
 use SeviaFlow\Core\Resources\ResourceEventContext;
 use SeviaFlow\Core\Resources\ResourceEventDispatcher;
+use Throwable;
 
 final class ApiCrudResponder
 {
@@ -24,7 +28,8 @@ final class ApiCrudResponder
         private readonly ApiRecordResolver $recordResolver = new ApiRecordResolver,
         private readonly ResourceEventDispatcher $resourceEventDispatcher = new ResourceEventDispatcher,
         private readonly ApiErrorResponder $apiErrorResponder = new ApiErrorResponder,
-        private readonly ApiAuthorization $authorization = new ApiAuthorization
+        private readonly ApiAuthorization $authorization = new ApiAuthorization,
+        private readonly ResourceOperationService $operationService = new ResourceOperationService,
     ) {}
 
     /**
@@ -58,13 +63,21 @@ final class ApiCrudResponder
         $payload = $this->payloadSanitizer->sanitizeForCreate($resourceClass, $this->requestPayload($request));
         $record = $this->newResourceModel($resourceClass);
         try {
-            DB::transaction(function () use ($request, $resourceClass, $resourceSlug, $record, $payload): void {
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_CREATING, $record, [], $payload);
-                $this->fillAndSave($record, $payload);
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_CREATED, $record, [], $payload);
-            });
+            $this->operationService->execute(
+                resourceClass: $resourceClass,
+                resourceSlug: $resourceSlug,
+                model: $record,
+                fields: $this->operationFields($resourceClass, $payload),
+                values: $payload,
+                context: ResourceContext::Create,
+                operationContext: $this->operationContext($request),
+            );
         } catch (InvalidArgumentException|LogicException $exception) {
             return $this->apiErrorResponder->validationError('event', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->apiErrorResponder->validationError('operation', 'The operation could not be completed.');
         }
 
         return response()->json([
@@ -87,15 +100,22 @@ final class ApiCrudResponder
         }
 
         $payload = $this->payloadSanitizer->sanitizeForUpdate($resourceClass, $this->requestPayload($request), $found);
-        $original = $found->getOriginal();
         try {
-            DB::transaction(function () use ($request, $resourceClass, $resourceSlug, $found, $payload, $original): void {
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_UPDATING, $found, is_array($original) ? $original : [], $payload);
-                $this->fillAndSave($found, $payload);
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_UPDATED, $found, is_array($original) ? $original : [], $payload);
-            });
+            $this->operationService->execute(
+                resourceClass: $resourceClass,
+                resourceSlug: $resourceSlug,
+                model: $found,
+                fields: $this->operationFields($resourceClass, $payload),
+                values: $payload,
+                context: ResourceContext::Edit,
+                operationContext: $this->operationContext($request),
+            );
         } catch (InvalidArgumentException|LogicException $exception) {
             return $this->apiErrorResponder->validationError('event', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->apiErrorResponder->validationError('operation', 'The operation could not be completed.');
         }
 
         return response()->json([
@@ -121,16 +141,54 @@ final class ApiCrudResponder
             abort(403);
         }
 
-        $original = $found->getOriginal();
+        $original = is_array($found->getOriginal()) ? $found->getOriginal() : [];
         try {
-            DB::transaction(function () use ($request, $resourceClass, $resourceSlug, $found, $original): void {
-                $normalizedOriginal = is_array($original) ? $original : [];
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_DELETING, $found, $normalizedOriginal, ['deleted' => true]);
+            $found->getConnection()->transaction(function () use (
+                $request,
+                $resourceClass,
+                $resourceSlug,
+                $found,
+                $original
+            ): void {
+                $operationContext = $this->operationContext($request);
+                $this->resourceEventDispatcher->dispatch(
+                    resourceClass: $resourceClass,
+                    event: ResourceEventContext::OPERATION_DELETING,
+                    record: $found,
+                    context: $this->eventContext(
+                        resourceClass: $resourceClass,
+                        resourceSlug: $resourceSlug,
+                        operation: ResourceEventContext::OPERATION_DELETING,
+                        record: $found,
+                        original: $original,
+                        changes: ['deleted' => true],
+                        operationContext: $operationContext,
+                        result: 'pending',
+                    ),
+                );
                 $found->delete();
-                $this->dispatch($request, $resourceClass, $resourceSlug, ResourceEventContext::OPERATION_DELETED, $found, $normalizedOriginal, ['deleted' => true]);
+                $this->resourceEventDispatcher->dispatchAfterCommit(
+                    resourceClass: $resourceClass,
+                    event: ResourceEventContext::OPERATION_DELETED,
+                    record: $found,
+                    context: $this->eventContext(
+                        resourceClass: $resourceClass,
+                        resourceSlug: $resourceSlug,
+                        operation: ResourceEventContext::OPERATION_DELETED,
+                        record: $found,
+                        original: $original,
+                        changes: ['deleted' => true],
+                        operationContext: $operationContext,
+                        result: 'committed',
+                    ),
+                );
             });
         } catch (InvalidArgumentException|LogicException $exception) {
             return $this->apiErrorResponder->validationError('event', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->apiErrorResponder->validationError('operation', 'The operation could not be completed.');
         }
 
         return response()->json([
@@ -156,18 +214,6 @@ final class ApiCrudResponder
     }
 
     /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function fillAndSave(Model $model, array $payload): void
-    {
-        foreach ($payload as $field => $value) {
-            $model->setAttribute($field, $value);
-        }
-
-        $model->save();
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function requestPayload(Request $request): array
@@ -179,33 +225,54 @@ final class ApiCrudResponder
     }
 
     /**
-     * @param  array<string,mixed>  $original
-     * @param  array<string,mixed>  $changes
+     * @param  class-string<\SeviaFlow\Core\Resources\Resource>  $resourceClass
+     * @param  array<string, mixed>  $payload
+     * @return array<int, Field>
      */
-    private function dispatch(
-        Request $request,
+    private function operationFields(string $resourceClass, array $payload): array
+    {
+        return $this->operationService->fieldsForResource($resourceClass, array_keys($payload));
+    }
+
+    private function operationContext(Request $request): ResourceOperationContext
+    {
+        return new ResourceOperationContext(
+            actor: $this->actor($request),
+            source: ResourceEventContext::SOURCE_API,
+            request: $request,
+        );
+    }
+
+    /**
+     * @param  class-string<\SeviaFlow\Core\Resources\Resource>  $resourceClass
+     * @param  array<string, mixed>  $original
+     * @param  array<string, mixed>  $changes
+     */
+    private function eventContext(
         string $resourceClass,
         string $resourceSlug,
         string $operation,
         Model $record,
         array $original,
-        array $changes
-    ): void {
-        $this->resourceEventDispatcher->dispatch(
+        array $changes,
+        ResourceOperationContext $operationContext,
+        string $result,
+    ): ResourceEventContext {
+        return new ResourceEventContext(
+            user: $operationContext->actor(),
             resourceClass: $resourceClass,
-            event: $operation,
-            record: $record,
-            context: new ResourceEventContext(
-                user: $this->actor($request),
-                resourceClass: $resourceClass,
-                resourceSlug: $resourceSlug,
-                operation: $operation,
-                source: ResourceEventContext::SOURCE_API,
-                request: $request,
-                original: $original,
-                changes: $changes,
-                metadata: []
-            )
+            resourceSlug: $resourceSlug,
+            operation: $operation,
+            source: $operationContext->source(),
+            request: $operationContext->request(),
+            original: $original,
+            changes: $changes,
+            metadata: array_merge($operationContext->metadata(), [
+                'record_key' => $record->getKey(),
+                'result' => $result,
+            ]),
+            connection: $record->getConnectionName() ?? $record->getConnection()->getName(),
+            correlationId: $operationContext->correlationId(),
         );
     }
 }

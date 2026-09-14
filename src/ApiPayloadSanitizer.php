@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use SeviaFlow\Core\Forms\FieldValidationBridge;
+use SeviaFlow\Core\Operations\ResourceOperationService;
 use SeviaFlow\Core\Resources\ApiResource;
 use SeviaFlow\Core\Resources\Resource;
 use SeviaFlow\Core\Resources\ResourceContext;
@@ -17,7 +18,8 @@ final class ApiPayloadSanitizer
     public function __construct(
         private readonly WorkflowStateFieldGuard $workflowStateFieldGuard = new WorkflowStateFieldGuard,
         private readonly ApiValidationRules $apiValidationRules = new ApiValidationRules,
-        private readonly FieldValidationBridge $fieldValidationBridge = new FieldValidationBridge
+        private readonly FieldValidationBridge $fieldValidationBridge = new FieldValidationBridge,
+        private readonly ResourceOperationService $operationService = new ResourceOperationService,
     ) {}
 
     /**
@@ -35,9 +37,10 @@ final class ApiPayloadSanitizer
 
         $this->workflowStateFieldGuard->ensurePayloadDoesNotWriteStateField($resourceClass, $payload);
         $this->ensureNoUnknownFields($payload, $allowed);
+        $payload = $this->preparePayload($resourceClass, $payload);
         $this->validatePayload(
             payload: $payload,
-            rules: $this->apiValidationRules->forCreate($resourceClass, $record),
+            rules: $this->apiValidationRules->forCreate($resourceClass, $record, $payload),
             attributes: $this->attributesFor($resourceClass, ResourceContext::Create, $allowed, $record, $api)
         );
 
@@ -59,9 +62,18 @@ final class ApiPayloadSanitizer
 
         $this->workflowStateFieldGuard->ensurePayloadDoesNotWriteStateField($resourceClass, $payload);
         $this->ensureNoUnknownFields($payload, $allowed);
+        $payload = $this->preparePayload($resourceClass, $payload);
+        $fieldValues = is_array($record?->getAttributes())
+            ? array_replace($record->getAttributes(), $payload)
+            : $payload;
         $this->validatePayload(
             payload: $payload,
-            rules: $this->apiValidationRules->forUpdate($resourceClass, $record),
+            rules: $this->apiValidationRules->forUpdate(
+                resourceClass: $resourceClass,
+                record: $record,
+                fieldValues: $fieldValues,
+                presentFields: array_keys($payload),
+            ),
             attributes: $this->attributesFor($resourceClass, ResourceContext::Edit, $allowed, $record, $api)
         );
 
@@ -125,6 +137,19 @@ final class ApiPayloadSanitizer
         }
 
         return $sanitized;
+    }
+
+    /**
+     * @param  class-string<resource>  $resourceClass
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function preparePayload(string $resourceClass, array $payload): array
+    {
+        return $this->operationService->prepareForValidation(
+            $this->operationService->fieldsForResource($resourceClass, array_keys($payload)),
+            $payload,
+        );
     }
 
     /**

@@ -19,9 +19,10 @@ final class ApiValidationRules
 
     /**
      * @param  class-string<resource>  $resourceClass
-     * @return array<string, array<int, string>>
+     * @param  array<string, mixed>  $fieldValues
+     * @return array<string, array<int, mixed>>
      */
-    public function forCreate(string $resourceClass, ?Model $record = null): array
+    public function forCreate(string $resourceClass, ?Model $record = null, array $fieldValues = []): array
     {
         $api = $this->apiDefinition($resourceClass);
         $allowed = $this->workflowStateFieldGuard->removeStateFieldFromAllowed(
@@ -39,16 +40,22 @@ final class ApiValidationRules
             resourceClass: $resourceClass,
             context: ResourceContext::Create,
             withFieldRules: $api->usesFormFieldRules(),
-            record: $record
+            record: $record,
+            fieldValues: $fieldValues,
         );
     }
 
     /**
      * @param  class-string<resource>  $resourceClass
-     * @return array<string, array<int, string>>
+     * @param  array<string, mixed>  $fieldValues
+     * @return array<string, array<int, mixed>>
      */
-    public function forUpdate(string $resourceClass, ?Model $record = null): array
-    {
+    public function forUpdate(
+        string $resourceClass,
+        ?Model $record = null,
+        array $fieldValues = [],
+        ?array $presentFields = null,
+    ): array {
         $api = $this->apiDefinition($resourceClass);
         $allowed = $this->workflowStateFieldGuard->removeStateFieldFromAllowed(
             $resourceClass,
@@ -65,7 +72,9 @@ final class ApiValidationRules
             resourceClass: $resourceClass,
             context: ResourceContext::Edit,
             withFieldRules: $api->usesFormFieldRules(),
-            record: $record
+            record: $record,
+            fieldValues: $fieldValues,
+            presentFields: $presentFields,
         );
     }
 
@@ -81,7 +90,9 @@ final class ApiValidationRules
         string $resourceClass,
         ResourceContext $context,
         bool $withFieldRules,
-        ?Model $record = null
+        ?Model $record = null,
+        array $fieldValues = [],
+        ?array $presentFields = null,
     ): array {
         $requiredLookup = array_fill_keys($required, true);
         $rules = [];
@@ -89,17 +100,29 @@ final class ApiValidationRules
 
         if ($withFieldRules) {
             $fieldRules = $this->fieldValidationBridge
-                ->build($resourceClass, $context, $allowed, $record)['rules'];
+                ->build($resourceClass, $context, $allowed, $record, $fieldValues)['rules'];
         }
 
         foreach ($allowed as $field) {
-            $baseRules = isset($requiredLookup[$field])
-                ? ['required']
-                : ['nullable'];
+            $baseRules = $context === ResourceContext::Edit
+                ? ['sometimes']
+                : [];
+            $isPresent = $presentFields === null || in_array($field, $presentFields, true);
+            $baseRules[] = isset($requiredLookup[$field]) && $isPresent
+                ? 'required'
+                : 'nullable';
+
+            $fieldRulesForField = $fieldRules[$field] ?? [];
+            if ($context === ResourceContext::Edit && $presentFields !== null && ! $isPresent) {
+                $fieldRulesForField = array_values(array_filter(
+                    $fieldRulesForField,
+                    static fn (mixed $rule): bool => ! is_string($rule) || strtolower(trim($rule)) !== 'required'
+                ));
+            }
 
             $rules[$field] = $this->deduplicateRules(array_values(array_merge(
                 $baseRules,
-                $fieldRules[$field] ?? []
+                $fieldRulesForField
             )));
         }
 

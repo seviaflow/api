@@ -96,9 +96,17 @@ it('enforces required fields on create', function (): void {
     ]))->toThrow(ValidationException::class);
 });
 
-it('enforces required fields on update', function (): void {
-    expect(fn () => (new ApiPayloadSanitizer)->sanitizeForUpdate(ApiContractResource::class, [
+it('allows a partial update without unchanged required fields', function (): void {
+    $sanitized = (new ApiPayloadSanitizer)->sanitizeForUpdate(ApiContractResource::class, [
         'status' => 'published',
+    ]);
+
+    expect($sanitized)->toBe(['status' => 'published']);
+});
+
+it('still rejects an explicit null for a required update field', function (): void {
+    expect(fn () => (new ApiPayloadSanitizer)->sanitizeForUpdate(ApiContractResource::class, [
+        'name' => null,
     ]))->toThrow(ValidationException::class);
 });
 
@@ -155,8 +163,8 @@ it('validation rules expose required and nullable fields for create and update',
         'name' => ['required'],
         'email' => ['required'],
     ])->and($rules->forUpdate(ApiContractResource::class))->toBe([
-        'name' => ['required'],
-        'status' => ['nullable'],
+        'name' => ['sometimes', 'required'],
+        'status' => ['sometimes', 'nullable'],
     ]);
 });
 
@@ -167,7 +175,7 @@ it('validation rules exclude workflow state field from create and update', funct
         'name' => ['required'],
         'email' => ['required'],
     ])->and($rules->forUpdate(ApiContractWorkflowResource::class))->toBe([
-        'name' => ['required'],
+        'name' => ['sometimes', 'required'],
     ]);
 });
 

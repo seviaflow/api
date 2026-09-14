@@ -7,6 +7,7 @@ namespace SeviaFlow\Api;
 use Illuminate\Database\Eloquent\Model;
 use SeviaFlow\Core\Resources\ApiResource;
 use SeviaFlow\Core\Resources\Resource;
+use SeviaFlow\Core\Support\SensitiveDataPolicy;
 
 final class ApiResourceSerializer
 {
@@ -21,6 +22,10 @@ final class ApiResourceSerializer
         $serialized = [];
 
         foreach ($api->getReadableFields() as $field) {
+            if (SensitiveDataPolicy::isSensitive($field)) {
+                continue;
+            }
+
             $serialized[$field] = data_get($record, $field);
         }
 
