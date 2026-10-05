@@ -225,6 +225,21 @@ it('sorts only sortable columns', function (): void {
         ->assertJsonPath('data.0.name', 'Alpha');
 });
 
+it('keeps equal sort values in a stable order across pages', function (): void {
+    $first = ApiEndpointRecord::query()->create(['name' => 'Same']);
+    $second = ApiEndpointRecord::query()->create(['name' => 'Same']);
+    $third = ApiEndpointRecord::query()->create(['name' => 'Same']);
+
+    pest_test_case()->getJson('/api/admin/resources/api-enabled-records?sort=name&direction=asc&per_page=2&page=1')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $first->getKey())
+        ->assertJsonPath('data.1.id', $second->getKey());
+
+    pest_test_case()->getJson('/api/admin/resources/api-enabled-records?sort=name&direction=asc&per_page=2&page=2')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $third->getKey());
+});
+
 it('ignores sorting by non sortable columns', function (): void {
     ApiEndpointRecord::query()->create(['name' => 'First', 'email' => 'z@example.com']);
     ApiEndpointRecord::query()->create(['name' => 'Second', 'email' => 'a@example.com']);

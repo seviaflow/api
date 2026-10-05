@@ -29,14 +29,15 @@ final class ApiIndexResponder
         }
 
         $perPage = $request->integer('per_page', (int) config('seviaflow.performance.pagination.default_per_page', 15));
+        $page = max(1, $request->integer('page', 1));
         $query = ResourceTableQuery::make($resourceClass, $resourceClass::table(new Table))
-            ->search(trim((string) $request->query('search', '')))
+            ->search(mb_substr(trim((string) $request->query('search', '')), 0, 200))
             ->sort(
                 trim((string) $request->query('sort', '')),
                 strtolower(trim((string) $request->query('direction', 'asc')))
             )
             ->filters($this->filterValues($request));
-        $paginator = $query->paginate($perPage);
+        $paginator = $query->paginate($perPage, $page);
 
         $data = [];
         foreach ($paginator->items() as $record) {
@@ -77,9 +78,34 @@ final class ApiIndexResponder
                 continue;
             }
 
-            $filters[$key] = $value;
+            $normalized = $this->normalizeFilterValue($value);
+            if ($normalized !== null) {
+                $filters[$key] = $normalized;
+            }
         }
 
         return $filters;
+    }
+
+    private function normalizeFilterValue(mixed $value, int $depth = 0): mixed
+    {
+        if ($depth > 2) {
+            return null;
+        }
+
+        if (is_array($value)) {
+            $normalized = [];
+            foreach ($value as $key => $nestedValue) {
+                if (! is_int($key) && ! is_string($key)) {
+                    continue;
+                }
+
+                $normalized[$key] = $this->normalizeFilterValue($nestedValue, $depth + 1);
+            }
+
+            return $normalized;
+        }
+
+        return is_scalar($value) || $value === null ? $value : null;
     }
 }
