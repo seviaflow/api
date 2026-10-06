@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use SeviaFlow\Api\ApiPayloadSanitizer;
+use SeviaFlow\Api\ApiResourceSerializer;
 use SeviaFlow\Api\OpenApi\OpenApiFieldSchemaMapper;
 use SeviaFlow\Core\Resources\ApiResource;
 use SeviaFlow\Core\Resources\Fields\CheckboxGroupField;
@@ -55,6 +56,15 @@ it('roundtrips valid simple field API payloads through field preparation', funct
         'brand_color' => '#AABBCC',
         'description' => '<p>Zażółć <strong>gęślą</strong></p><a href="https://example.test">Link</a>',
     ]);
+});
+
+it('sanitizes legacy rich text while serializing readable API data', function (): void {
+    $serialized = (new ApiResourceSerializer)->serialize(SimpleFieldApiResource::class, [
+        'description' => '<div data-wrapper="unsafe"><span onclick="alert(1)"><p onmouseover="alert(2)">Stary tekst</p>'
+            .'<svg><script>alert(3)</script></svg></span></div>',
+    ]);
+
+    expect($serialized['description'])->toBe('<p>Stary tekst</p>');
 });
 
 it('rejects invalid roots, collections and colors at the API boundary', function (): void {
