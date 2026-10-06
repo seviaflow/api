@@ -64,8 +64,8 @@ it('rejects invalid roots, collections and colors at the API boundary', function
         'tags' => 'one',
         'metadata' => '["not-a-map"]',
         'payload' => '[1,2,3]',
-            'brand_color' => 'red',
-            'description' => str_repeat('<p>x</p>', 20000),
+        'brand_color' => 'red',
+        'description' => str_repeat('<p>x</p>', 20000),
     ]))->toThrow(ValidationException::class);
 });
 

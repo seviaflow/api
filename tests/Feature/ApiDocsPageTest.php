@@ -45,6 +45,7 @@ it('guest cannot access api docs page', function (): void {
 
     app('router')->setRoutes(new RouteCollection);
     app()->register(SeviaFlowApiServiceProvider::class, true);
+    app('router')->get('/login', static fn () => response('', 200))->name('login');
 
     pest_test_case()->get('/api/admin/api-docs')
         ->assertStatus(302);

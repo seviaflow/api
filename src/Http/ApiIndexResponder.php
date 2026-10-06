@@ -96,10 +96,6 @@ final class ApiIndexResponder
         if (is_array($value)) {
             $normalized = [];
             foreach ($value as $key => $nestedValue) {
-                if (! is_int($key) && ! is_string($key)) {
-                    continue;
-                }
-
                 $normalized[$key] = $this->normalizeFilterValue($nestedValue, $depth + 1);
             }
 

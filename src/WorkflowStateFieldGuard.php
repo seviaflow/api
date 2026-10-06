@@ -15,7 +15,7 @@ final class WorkflowStateFieldGuard
     ) {}
 
     /**
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<\SeviaFlow\Core\Resources\Resource>  $resourceClass
      * @param  array<int, string>  $fields
      * @return array<int, string>
      */
@@ -34,7 +34,7 @@ final class WorkflowStateFieldGuard
     }
 
     /**
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<\SeviaFlow\Core\Resources\Resource>  $resourceClass
      * @param  array<string, mixed>  $payload
      */
     public function ensurePayloadDoesNotWriteStateField(string $resourceClass, array $payload): void
@@ -51,7 +51,7 @@ final class WorkflowStateFieldGuard
     }
 
     /**
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<\SeviaFlow\Core\Resources\Resource>  $resourceClass
      */
     private function resolvedStateField(string $resourceClass): ?string
     {

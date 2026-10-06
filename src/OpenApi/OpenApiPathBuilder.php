@@ -287,7 +287,7 @@ final class OpenApiPathBuilder
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return array<int|string, mixed>
      */
     private function commonErrorResponses(): array
     {
