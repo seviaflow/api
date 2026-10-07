@@ -52,6 +52,7 @@ beforeEach(function (): void {
         $table->string('email')->nullable();
         $table->unsignedBigInteger('company_id')->nullable();
         $table->string('status')->nullable();
+        $table->string('default_status')->nullable()->default('database-default');
         $table->string('secret')->nullable();
         $table->timestamps();
     });
@@ -284,9 +285,11 @@ it('create endpoint stores record and returns readable fields with created statu
     ])->assertCreated()
         ->assertJsonPath('data.name', 'Created')
         ->assertJsonPath('data.email', 'created@example.com')
+        ->assertJsonPath('data.default_status', 'database-default')
         ->assertJsonMissingPath('data.secret');
 
-    expect(ApiEndpointRecord::query()->where('name', 'Created')->exists())->toBeTrue();
+    expect(ApiEndpointRecord::query()->where('name', 'Created')->value('default_status'))
+        ->toBe('database-default');
 });
 
 it('update endpoint updates record and returns readable fields', function (): void {
@@ -300,9 +303,44 @@ it('update endpoint updates record and returns readable fields', function (): vo
         'name' => 'After',
     ])->assertOk()
         ->assertJsonPath('data.name', 'After')
+        ->assertJsonPath('data.default_status', 'database-default')
         ->assertJsonMissingPath('data.secret');
 
     expect($record->fresh()?->name)->toBe('After');
+});
+
+it('clears a nullable api field only when null is explicitly supplied', function (): void {
+    $record = ApiEndpointRecord::query()->create([
+        'name' => 'Nullable API field',
+        'email' => 'nullable@example.com',
+        'default_status' => 'keep-me',
+    ]);
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'name' => 'Nullable API field updated',
+    ])->assertOk()
+        ->assertJsonPath('data.default_status', 'keep-me');
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'default_status' => null,
+    ])->assertOk()
+        ->assertJsonPath('data.default_status', null);
+
+    expect($record->fresh()?->default_status)->toBeNull();
+});
+
+it('does not drop zero-valued api payloads', function (): void {
+    $record = ApiEndpointRecord::query()->create([
+        'name' => 'Zero company',
+        'email' => 'zero@example.com',
+    ]);
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'company_id' => 0,
+    ])->assertOk()
+        ->assertJsonPath('data.company_id', 0);
+
+    expect($record->fresh()?->company_id)->toBe(0);
 });
 
 it('create and update accept belongsTo foreign key as scalar id field', function (): void {
@@ -597,9 +635,9 @@ final class ApiWriteableRecordResource extends Resource
     {
         return $api
             ->enabled()
-            ->readable(['id', 'name', 'email', 'company_id'])
-            ->creatable(['name', 'email', 'company_id'])
-            ->updatable(['name', 'status', 'company_id'])
+            ->readable(['id', 'name', 'email', 'company_id', 'default_status'])
+            ->creatable(['name', 'email', 'company_id', 'default_status'])
+            ->updatable(['name', 'status', 'company_id', 'default_status'])
             ->requiredOnCreate(['name', 'email'])
             ->requiredOnUpdate(['name'])
             ->deletable();
@@ -754,6 +792,7 @@ final class ApiSoftDeleteRecordResource extends Resource
  * @property string|null $email
  * @property int|null $company_id
  * @property string|null $status
+ * @property string|null $default_status
  * @property string|null $secret
  */
 final class ApiEndpointRecord extends Model

@@ -81,7 +81,7 @@ final class ApiCrudResponder
         }
 
         return response()->json([
-            'data' => $this->serializer->serialize($resourceClass, $record),
+            'data' => $this->serializer->serialize($resourceClass, $record->refresh()),
         ], 201);
     }
 
