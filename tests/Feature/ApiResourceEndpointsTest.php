@@ -304,9 +304,54 @@ it('update endpoint updates record and returns readable fields', function (): vo
     ])->assertOk()
         ->assertJsonPath('data.name', 'After')
         ->assertJsonPath('data.default_status', 'database-default')
+        ->assertHeader('X-SeviaFlow-Concurrency', 'unprotected')
+        ->assertHeader('ETag')
         ->assertJsonMissingPath('data.secret');
 
     expect($record->fresh()?->name)->toBe('After');
+});
+
+it('uses ETag as an atomic update precondition and returns a conflict for a stale token', function (): void {
+    $record = ApiEndpointRecord::query()->create([
+        'name' => 'Concurrent before',
+        'email' => 'concurrent@example.com',
+        'status' => 'draft',
+    ]);
+
+    $firstRead = pest_test_case()->getJson('/api/admin/resources/api-enabled-records/'.$record->getKey())
+        ->assertOk()
+        ->assertHeader('ETag');
+    $staleTag = (string) $firstRead->headers->get('ETag');
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'name' => 'First writer',
+    ], ['If-Match' => $staleTag])
+        ->assertOk()
+        ->assertHeader('X-SeviaFlow-Concurrency', 'protected');
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'name' => 'Stale writer',
+    ], ['If-Match' => $staleTag])
+        ->assertStatus(409)
+        ->assertJsonPath('errors.revision.0', 'The record changed while this operation was being prepared. Refresh the record and try again.');
+
+    expect($record->fresh()?->name)->toBe('First writer');
+});
+
+it('rejects a malformed If-Match revision with a revision validation error', function (): void {
+    $record = ApiEndpointRecord::query()->create([
+        'name' => 'Malformed revision',
+        'email' => 'malformed-revision@example.com',
+        'status' => 'draft',
+    ]);
+
+    pest_test_case()->patchJson('/api/admin/resources/api-enabled-records/'.$record->getKey(), [
+        'name' => 'Should not save',
+    ], ['If-Match' => 'not-a-revision'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['revision']);
+
+    expect($record->fresh()?->name)->toBe('Malformed revision');
 });
 
 it('clears a nullable api field only when null is explicitly supplied', function (): void {

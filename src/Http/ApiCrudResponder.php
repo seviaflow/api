@@ -12,8 +12,11 @@ use InvalidArgumentException;
 use LogicException;
 use SeviaFlow\Api\ApiPayloadSanitizer;
 use SeviaFlow\Api\ApiResourceSerializer;
+use SeviaFlow\Core\Exceptions\ResourceOperationAuthorizationException;
+use SeviaFlow\Core\Exceptions\ResourceOperationConflictException;
 use SeviaFlow\Core\Operations\ResourceOperationContext;
 use SeviaFlow\Core\Operations\ResourceOperationService;
+use SeviaFlow\Core\Operations\ResourceRevision;
 use SeviaFlow\Core\Resources\Fields\Field;
 use SeviaFlow\Core\Resources\ResourceContext;
 use SeviaFlow\Core\Resources\ResourceEventContext;
@@ -46,9 +49,9 @@ final class ApiCrudResponder
             abort(403);
         }
 
-        return response()->json([
+        return $this->withRevision(response()->json([
             'data' => $this->serializer->serialize($resourceClass, $found),
-        ]);
+        ]), $found, 'available');
     }
 
     /**
@@ -80,9 +83,9 @@ final class ApiCrudResponder
             return $this->apiErrorResponder->validationError('operation', 'The operation could not be completed.');
         }
 
-        return response()->json([
+        return $this->withRevision(response()->json([
             'data' => $this->serializer->serialize($resourceClass, $record->refresh()),
-        ], 201);
+        ], 201), $record, 'not-applicable');
     }
 
     /**
@@ -101,6 +104,12 @@ final class ApiCrudResponder
 
         $payload = $this->payloadSanitizer->sanitizeForUpdate($resourceClass, $this->requestPayload($request), $found);
         try {
+            $expectedRevision = ResourceRevision::fromIfMatch($request->header('If-Match'));
+        } catch (InvalidArgumentException $exception) {
+            return $this->apiErrorResponder->validationError('revision', $exception->getMessage());
+        }
+
+        try {
             $this->operationService->execute(
                 resourceClass: $resourceClass,
                 resourceSlug: $resourceSlug,
@@ -108,8 +117,12 @@ final class ApiCrudResponder
                 fields: $this->operationFields($resourceClass, $payload),
                 values: $payload,
                 context: ResourceContext::Edit,
-                operationContext: $this->operationContext($request),
+                operationContext: $this->operationContext($request, $expectedRevision),
             );
+        } catch (ResourceOperationConflictException $exception) {
+            return $this->apiErrorResponder->conflict('revision', $exception->getMessage());
+        } catch (ResourceOperationAuthorizationException) {
+            abort(403);
         } catch (InvalidArgumentException|LogicException $exception) {
             return $this->apiErrorResponder->validationError('event', $exception->getMessage());
         } catch (Throwable $exception) {
@@ -118,9 +131,9 @@ final class ApiCrudResponder
             return $this->apiErrorResponder->validationError('operation', 'The operation could not be completed.');
         }
 
-        return response()->json([
+        return $this->withRevision(response()->json([
             'data' => $this->serializer->serialize($resourceClass, $found->refresh()),
-        ]);
+        ]), $found, $expectedRevision === null ? 'unprotected' : 'protected');
     }
 
     /**
@@ -234,13 +247,21 @@ final class ApiCrudResponder
         return $this->operationService->fieldsForResource($resourceClass, array_keys($payload));
     }
 
-    private function operationContext(Request $request): ResourceOperationContext
+    private function operationContext(Request $request, ?string $expectedRevision = null): ResourceOperationContext
     {
         return new ResourceOperationContext(
             actor: $this->actor($request),
             source: ResourceEventContext::SOURCE_API,
             request: $request,
+            expectedRevision: $expectedRevision,
         );
+    }
+
+    private function withRevision(JsonResponse $response, Model $record, string $concurrency): JsonResponse
+    {
+        return $response
+            ->header('ETag', '"'.ResourceRevision::for($record).'"')
+            ->header('X-SeviaFlow-Concurrency', $concurrency);
     }
 
     /**
