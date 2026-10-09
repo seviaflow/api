@@ -4,13 +4,13 @@ Composer package: `seviaflow/api`
 
 Repository: `https://github.com/seviaflow/api`
 
-API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation.
+API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation. Its manifest also requires the separately distributed `seviaflow/licensing` adapter.
 
-API depends on Core only. It does not require Livewire or `seviaflow/ui`.
+API does not require Livewire or `seviaflow/ui`. It is a paid/private profile: installation requires an authorized Hub Composer repository and an active API entitlement; a missing licensing adapter must fail closed.
 
 ## Installation Status
 
-SeviaFlow is pre-release. The `main` branch is aliased as `0.1.x-dev`; the first stable tag is expected to start at `0.1.0`.
+SeviaFlow is pre-release and this repository currently declares `license: proprietary`. The source repository is not a public client download endpoint. The first stable tag and support scope remain owner decisions.
 
 ```bash
 composer require seviaflow/api:^0.1@dev
