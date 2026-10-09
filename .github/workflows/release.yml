@@ -59,6 +59,9 @@ jobs:
           archive="$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
           manifest="$(cat build/composer-manifest.json)"
           hash="$(sha256sum "$archive" | cut -d' ' -f1)"
+          dependency_set_hash="$(jq -cS '{require: (.require // {}), "require-dev": (."require-dev" // {}), conflict: (.conflict // {}), provide: (.provide // {}), replace: (.replace // {}), suggest: (.suggest // {})}' build/composer-manifest.json | sha256sum | cut -d' ' -f1)"
+          completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          checks="$(jq -cn --arg source "$GITHUB_SHA" --arg artifact "$hash" --arg dependencies "$dependency_set_hash" --arg completed "$completed_at" '[{"name":"manifest-validated","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed},{"name":"artifact-built","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed}]')"
           curl --fail-with-body --silent --show-error --retry 2 \
             --user "$HUB_UPLOAD_USERNAME:$HUB_UPLOAD_PASSWORD" \
             -F "package_name=$PACKAGE_NAME" \
@@ -66,6 +69,8 @@ jobs:
             -F 'channel=stable' \
             -F "reference=$GITHUB_SHA" \
             -F "artifact_hash=$hash" \
+            -F "dependency_set_hash=$dependency_set_hash" \
+            -F "checks=$checks" \
             -F "composer_manifest=$manifest" \
             -F "artifact=@$archive;type=application/zip" \
             "$HUB_UPLOAD_URL"
