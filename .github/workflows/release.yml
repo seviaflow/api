@@ -24,11 +24,18 @@ jobs:
       HUB_UPLOAD_URL: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_URL }}
       HUB_UPLOAD_USERNAME: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_USERNAME }}
       HUB_UPLOAD_PASSWORD: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_PASSWORD }}
+      SEVIAFLOW_RELEASE_ATTESTATION_KEY: ${{ secrets.SEVIAFLOW_RELEASE_ATTESTATION_KEY }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sqlite, pdo_sqlite, zip
+          coverage: none
 
       - name: Validate tag and manifest
         run: |
@@ -38,6 +45,12 @@ jobs:
           composer validate --strict
           jq -e --arg version "$version" 'select(.name == "seviaflow/api") | .version = $version' composer.json >/dev/null
 
+      - name: Resolve dependencies and run product tests
+        run: |
+          set -eu
+          composer install --no-interaction --prefer-dist --no-progress
+          composer check
+
       - name: Build clean release archive
         run: |
           set -eu
@@ -46,6 +59,7 @@ jobs:
           mkdir -p build/package
           git archive --format=tar "$GITHUB_SHA" | tar -x -C build/package
           jq --arg version "$version" '.version = $version' composer.json > build/package/composer.json
+          cp composer.lock build/package/composer.lock
           (cd build/package && zip -qr "$GITHUB_WORKSPACE/seviaflow-api-$version.zip" .)
           sha256sum "$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
           scripts/build-release-manifest.sh composer.json "$version" build/composer-manifest.json
@@ -60,6 +74,8 @@ jobs:
           manifest="$(cat build/composer-manifest.json)"
           hash="$(sha256sum "$archive" | cut -d' ' -f1)"
           dependency_set_hash="$(scripts/release-dependency-set-hash.sh build/composer-manifest.json)"
+          scripts/create-release-test-evidence.sh "$hash" "$dependency_set_hash" "$version" build/release-test-evidence.json
+          test_evidence="$(cat build/release-test-evidence.json)"
           completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           checks="$(jq -cn --arg source "$GITHUB_SHA" --arg artifact "$hash" --arg dependencies "$dependency_set_hash" --arg completed "$completed_at" '[{"name":"manifest-validated","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed},{"name":"artifact-built","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed}]')"
           curl --fail-with-body --silent --show-error --retry 2 \
@@ -71,6 +87,7 @@ jobs:
             -F "artifact_hash=$hash" \
             -F "dependency_set_hash=$dependency_set_hash" \
             -F "checks=$checks" \
+            -F "test_evidence=$test_evidence" \
             -F "composer_manifest=$manifest" \
             -F "artifact=@$archive;type=application/zip" \
             "$HUB_UPLOAD_URL"
