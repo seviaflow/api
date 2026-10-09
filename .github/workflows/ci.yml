@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: seviaflow/core
-          ref: 6661e626e6f272840feb06ed00e5c7aec829464a
+          ref: 216b30df97d5cbbc4542d609e72d284781f7d0cf
           path: core
           token: ${{ secrets.SEVIAFLOW_REPO_TOKEN || github.token }}
 
