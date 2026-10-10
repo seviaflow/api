@@ -12,11 +12,14 @@ it('api depends on core only and does not require UI or Livewire', function (): 
     expect(array_key_exists('seviaflow/ui', $requirements))->toBeFalse();
     expect(array_key_exists('livewire/livewire', $requirements))->toBeFalse();
     expect(array_key_exists('seviaflow/devtools', $requirements))->toBeFalse();
+    expect(array_key_exists('seviaflow/licensing', $requirements))->toBeFalse();
+    expect(array_key_exists('seviaflow/copilot', $requirements))->toBeFalse();
 
     $productionText = scanPackageText($root, ['src', 'routes', 'resources', 'config']);
 
     expect(str_contains($productionText, 'SeviaFlow\\Ui'))->toBeFalse();
     expect(str_contains($productionText, 'Livewire\\'))->toBeFalse();
+    expect(str_contains($productionText, 'SeviaFlow\\Licensing'))->toBeFalse();
 });
 
 function scanPackageText(string $root, array $directories): string

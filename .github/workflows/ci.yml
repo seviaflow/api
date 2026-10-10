@@ -29,7 +29,6 @@ jobs:
           SEVIAFLOW_REPO_TOKEN: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
           PRIVATE_DEPENDENCIES: |
             seviaflow/core 216b30df97d5cbbc4542d609e72d284781f7d0cf
-            seviaflow/licensing 51c7d3d3f302dfabada1823a7db4f45675da1f3f
         run: |
           set -euo pipefail
           if [[ -z "$SEVIAFLOW_REPO_TOKEN" ]]; then
@@ -78,16 +77,9 @@ jobs:
           path: core
           token: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
 
-      - uses: actions/checkout@v4
-        with:
-          repository: seviaflow/licensing
-          ref: 51c7d3d3f302dfabada1823a7db4f45675da1f3f
-          path: licensing
-          token: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
-
       - name: Record candidate revisions
         run: |
-          for repo in api core licensing; do
+          for repo in api core; do
             printf '%s=' "$repo"
             git -C "$repo" rev-parse HEAD
           done
@@ -106,7 +98,6 @@ jobs:
         working-directory: api
         run: |
           composer config repositories.seviaflow-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"seviaflow/core":"0.1.x-dev"}}}'
-          composer config repositories.seviaflow-licensing '{"type":"path","url":"../licensing","options":{"symlink":false,"versions":{"seviaflow/licensing":"0.1.x-dev"}}}'
           composer update --no-interaction --prefer-dist
 
       - name: PHP quality gates
