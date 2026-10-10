@@ -7,6 +7,19 @@ on:
         description: SemVer release without or with a leading v
         required: true
         type: string
+      ref:
+        description: Full source commit SHA for staging, or an existing v-tag for stable
+        required: true
+        type: string
+      channel:
+        description: beta/dev are draft staging uploads; stable requires a v-tag
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - dev
+          - stable
   push:
     tags:
       - 'v*.*.*'
@@ -21,15 +34,22 @@ jobs:
     env:
       PACKAGE_NAME: seviaflow/api
       RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+      RELEASE_INPUT_REF: ${{ inputs.ref || '' }}
+      RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}
       HUB_UPLOAD_URL: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_URL }}
       HUB_UPLOAD_USERNAME: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_USERNAME }}
       HUB_UPLOAD_PASSWORD: ${{ secrets.SEVIAFLOW_HUB_UPLOAD_PASSWORD }}
+      SEVIAFLOW_REPO_TOKEN: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
       SEVIAFLOW_RELEASE_ATTESTATION_KEY: ${{ secrets.SEVIAFLOW_RELEASE_ATTESTATION_KEY }}
+      SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID: ${{ vars.SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID }}
+      CORE_RELEASE_SHA: 216b30df97d5cbbc4542d609e72d284781f7d0cf
+      LICENSING_RELEASE_SHA: 51c7d3d3f302dfabada1823a7db4f45675da1f3f
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -37,57 +57,87 @@ jobs:
           extensions: sqlite, pdo_sqlite, zip
           coverage: none
 
-      - name: Validate tag and manifest
+      - name: Validate source, channel and manifest
         run: |
-          set -eu
+          set -euo pipefail
           version="${RELEASE_VERSION#v}"
-          printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'
+          source_input="$RELEASE_INPUT_REF"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            source_input="$GITHUB_REF"
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$RELEASE_CHANNEL" != stable ]]; then
+            echo 'tag pushes must use stable' >&2
+            exit 1
+          fi
+          if [[ "$source_input" =~ ^[0-9a-f]{40}$ ]]; then
+            source_sha="$(git rev-parse --verify "$source_input^{commit}")"
+            source_ref="refs/staging/$source_sha"
+          else
+            source_ref="$source_input"
+            [[ "$source_ref" == refs/tags/v* || "$source_ref" == v* ]] || { echo 'dispatch ref must be a full SHA or v-tag' >&2; exit 1; }
+            source_ref="refs/tags/${source_ref#refs/tags/}"
+            source_sha="$(git rev-parse --verify "$source_ref^{commit}")"
+          fi
+          if [[ "$RELEASE_CHANNEL" == stable ]]; then
+            [[ "$source_ref" == "refs/tags/v$version" ]] || { echo 'stable releases require the matching v-tag' >&2; exit 1; }
+            [[ "$version" != *-* ]] || { echo 'pre-release versions cannot use stable' >&2; exit 1; }
+          else
+            [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$source_ref" == "refs/staging/$source_sha" ]] || { echo 'staging channels require a dispatch full-SHA ref' >&2; exit 1; }
+          fi
+          printf 'SOURCE_SHA=%s\nSOURCE_REF=%s\nRELEASE_VERSION_NORMALIZED=%s\n' "$source_sha" "$source_ref" "$version" >> "$GITHUB_ENV"
           composer validate --strict
-          jq -e --arg version "$version" 'select(.name == "seviaflow/api") | .version = $version' composer.json >/dev/null
+          jq -e --arg package "$PACKAGE_NAME" '.name == $package' composer.json >/dev/null
 
-      - name: Resolve dependencies and run product tests
+      - name: Resolve exact private dependencies and run product tests
         run: |
-          set -eu
-          composer install --no-interaction --prefer-dist --no-progress
+          set -euo pipefail
+          : "${SEVIAFLOW_REPO_TOKEN:?SEVIAFLOW_REPO_TOKEN is required}"
+          composer config --global --auth github-oauth.github.com "$SEVIAFLOW_REPO_TOKEN"
+          composer config repositories.seviaflow-core vcs https://github.com/seviaflow/core
+          composer config repositories.seviaflow-licensing vcs https://github.com/seviaflow/licensing
+          mkdir -p build
+          cp composer.json build/source-composer.json
+          composer require --no-update "seviaflow/core:dev-main#$CORE_RELEASE_SHA" "seviaflow/licensing:dev-main#$LICENSING_RELEASE_SHA"
+          composer update --no-interaction --prefer-dist --no-progress --with-dependencies
+          mv build/source-composer.json composer.json
+          for spec in "seviaflow/core:$CORE_RELEASE_SHA" "seviaflow/licensing:$LICENSING_RELEASE_SHA"; do
+            package="${spec%%:*}"
+            sha="${spec##*:}"
+            jq -e --arg package "$package" --arg sha "$sha" '[.packages[]?, .packages-dev[]?] | any(.name == $package and ((.source.reference // "") == $sha or (.dist.reference // "") == $sha))' composer.lock >/dev/null
+          done
           composer check
 
       - name: Build clean release archive
         run: |
-          set -eu
-          version="${RELEASE_VERSION#v}"
+          set -euo pipefail
           mkdir -p build
-          mkdir -p build/package
-          git archive --format=tar "$GITHUB_SHA" | tar -x -C build/package
-          jq --arg version "$version" '.version = $version' composer.json > build/package/composer.json
-          cp composer.lock build/package/composer.lock
-          (cd build/package && zip -qr "$GITHUB_WORKSPACE/seviaflow-api-$version.zip" .)
-          sha256sum "$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
-          scripts/build-release-manifest.sh composer.json "$version" build/composer-manifest.json
+          scripts/build-release-archive.sh "$SOURCE_SHA" "$RELEASE_VERSION_NORMALIZED" "$GITHUB_WORKSPACE/seviaflow-api-$RELEASE_VERSION_NORMALIZED.zip" build/composer-manifest.json
 
-      - name: Upload immutable release draft to Hub
-        env:
-          VERSION: ${{ inputs.version || github.ref_name }}
+      - name: Create signed staging or stable evidence
         run: |
-          set -eu
-          version="${VERSION#v}"
-          archive="$GITHUB_WORKSPACE/seviaflow-api-$version.zip"
-          manifest="$(cat build/composer-manifest.json)"
+          set -euo pipefail
+          : "${SEVIAFLOW_RELEASE_ATTESTATION_KEY:?SEVIAFLOW_RELEASE_ATTESTATION_KEY is required}"
+          export SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID="${SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID:-release-attestation-v1}"
+          archive="$GITHUB_WORKSPACE/seviaflow-api-$RELEASE_VERSION_NORMALIZED.zip"
           hash="$(sha256sum "$archive" | cut -d' ' -f1)"
           dependency_set_hash="$(scripts/release-dependency-set-hash.sh build/composer-manifest.json)"
-          scripts/create-release-test-evidence.sh "$hash" "$dependency_set_hash" "$version" build/release-test-evidence.json
+          scripts/create-release-test-evidence.sh "$hash" "$dependency_set_hash" "$RELEASE_VERSION_NORMALIZED" "$SOURCE_SHA" "$SOURCE_REF" build/release-test-evidence.json
           test_evidence="$(cat build/release-test-evidence.json)"
           completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          checks="$(jq -cn --arg source "$GITHUB_SHA" --arg artifact "$hash" --arg dependencies "$dependency_set_hash" --arg completed "$completed_at" '[{"name":"manifest-validated","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed},{"name":"artifact-built","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed}]')"
+          checks="$(jq -cn --arg source "$SOURCE_SHA" --arg artifact "$hash" --arg dependencies "$dependency_set_hash" --arg completed "$completed_at" '[{"name":"manifest-validated","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed},{"name":"artifact-built","conclusion":"success","source_revision":$source,"artifact_hash":$artifact,"dependency_set_hash":$dependencies,"completed_at":$completed}]')"
+          : "${HUB_UPLOAD_URL:?HUB_UPLOAD_URL is required}"
+          : "${HUB_UPLOAD_USERNAME:?HUB_UPLOAD_USERNAME is required}"
+          : "${HUB_UPLOAD_PASSWORD:?HUB_UPLOAD_PASSWORD is required}"
           curl --fail-with-body --silent --show-error --retry 2 \
             --user "$HUB_UPLOAD_USERNAME:$HUB_UPLOAD_PASSWORD" \
             -F "package_name=$PACKAGE_NAME" \
-            -F "version=$version" \
-            -F 'channel=stable' \
-            -F "reference=$GITHUB_SHA" \
+            -F "version=$RELEASE_VERSION_NORMALIZED" \
+            -F "channel=$RELEASE_CHANNEL" \
+            -F "reference=$SOURCE_SHA" \
             -F "artifact_hash=$hash" \
             -F "dependency_set_hash=$dependency_set_hash" \
             -F "checks=$checks" \
             -F "test_evidence=$test_evidence" \
-            -F "composer_manifest=$manifest" \
+            -F "composer_manifest=$(cat build/composer-manifest.json)" \
             -F "artifact=@$archive;type=application/zip" \
             "$HUB_UPLOAD_URL"
