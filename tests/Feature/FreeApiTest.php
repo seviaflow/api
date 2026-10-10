@@ -17,7 +17,7 @@ it('keeps legacy API license middleware compatible without a licensing adapter',
 });
 
 it('does not add a paid license gate to API or documentation routes', function (): void {
-    foreach (Route::getRoutes() as $route) {
+    foreach (Route::getRoutes()->getRoutes() as $route) {
         if (str_starts_with((string) $route->getName(), 'seviaflow.api.')) {
             expect($route->gatherMiddleware())->not->toContain('seviaflow.api.license');
         }
