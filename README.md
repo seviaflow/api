@@ -4,9 +4,9 @@ Composer package: `seviaflow/api`
 
 Repository: `https://github.com/seviaflow/api`
 
-API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation. Its manifest also requires the separately distributed `seviaflow/licensing` adapter.
+API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation. It requires Core, not Copilot or a licensing adapter.
 
-API does not require Livewire or `seviaflow/ui`. It is a paid/private profile: installation requires an authorized Hub Composer repository and an active API entitlement; a missing licensing adapter must fail closed.
+API does not require Livewire or `seviaflow/ui`. API is part of the free edition: no purchase, Hub activation or API entitlement is required at runtime. Authentication, authorization and throttling still apply.
 
 ## Installation Status
 
@@ -15,6 +15,12 @@ SeviaFlow is pre-release and this repository currently declares `license: propri
 ```bash
 composer require seviaflow/api:^0.1@dev
 ```
+
+## Upgrade from the former paid profile
+
+Remove `SEVIAFLOW_API_LICENSE_ENFORCE` and the obsolete `licensing` block from published API configuration. The legacy `seviaflow.api.license` middleware alias remains as a deprecated pass-through, so old configurations do not break. Do not remove host authentication, permissions or throttling. Only remove `seviaflow/licensing` if no other installed module (such as paid Copilot) needs it. Clear the host configuration and route caches after updating.
+
+No stable artifacts are published by this change. Price zero does not change the current proprietary license or make the private repository public.
 
 ## Routes
 

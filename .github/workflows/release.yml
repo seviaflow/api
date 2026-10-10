@@ -43,7 +43,6 @@ jobs:
       SEVIAFLOW_RELEASE_ATTESTATION_KEY: ${{ secrets.SEVIAFLOW_RELEASE_ATTESTATION_KEY }}
       SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID: ${{ vars.SEVIAFLOW_RELEASE_ATTESTATION_KEY_ID }}
       CORE_RELEASE_SHA: 216b30df97d5cbbc4542d609e72d284781f7d0cf
-      LICENSING_RELEASE_SHA: 51c7d3d3f302dfabada1823a7db4f45675da1f3f
 
     steps:
       - uses: actions/checkout@v4
@@ -94,13 +93,12 @@ jobs:
           : "${SEVIAFLOW_REPO_TOKEN:?SEVIAFLOW_REPO_TOKEN is required}"
           composer config --global --auth github-oauth.github.com "$SEVIAFLOW_REPO_TOKEN"
           composer config repositories.seviaflow-core vcs https://github.com/seviaflow/core
-          composer config repositories.seviaflow-licensing vcs https://github.com/seviaflow/licensing
           mkdir -p build
           cp composer.json build/source-composer.json
-          composer require --no-update "seviaflow/core:dev-main#$CORE_RELEASE_SHA" "seviaflow/licensing:dev-main#$LICENSING_RELEASE_SHA"
+          composer require --no-update "seviaflow/core:dev-main#$CORE_RELEASE_SHA"
           composer update --no-interaction --prefer-dist --no-progress --with-dependencies
           mv build/source-composer.json composer.json
-          for spec in "seviaflow/core:$CORE_RELEASE_SHA" "seviaflow/licensing:$LICENSING_RELEASE_SHA"; do
+          for spec in "seviaflow/core:$CORE_RELEASE_SHA"; do
             package="${spec%%:*}"
             sha="${spec##*:}"
             jq -e --arg package "$package" --arg sha "$sha" '[.packages[]?, .packages-dev[]?] | any(.name == $package and ((.source.reference // "") == $sha or (.dist.reference // "") == $sha))' composer.lock >/dev/null
