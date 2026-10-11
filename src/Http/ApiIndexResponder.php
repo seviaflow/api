@@ -30,7 +30,9 @@ final class ApiIndexResponder
 
         $perPage = $request->integer('per_page', (int) config('seviaflow.performance.pagination.default_per_page', 15));
         $page = max(1, $request->integer('page', 1));
-        $query = ResourceTableQuery::make($resourceClass, $resourceClass::table(new Table))
+        // API readable fields and model accessors are independent of UI index columns.
+        $table = $resourceClass::table(new Table)->selectOnlyVisibleColumns(false);
+        $query = ResourceTableQuery::make($resourceClass, $table)
             ->search(mb_substr(trim((string) $request->query('search', '')), 0, 200))
             ->sort(
                 trim((string) $request->query('sort', '')),

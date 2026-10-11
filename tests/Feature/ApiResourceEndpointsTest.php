@@ -115,6 +115,20 @@ it('disabled resource api is denied with not found', function (): void {
         ->assertNotFound();
 });
 
+it('index includes API readable fields that are absent from UI table columns', function (): void {
+    ApiEndpointRecord::query()->create([
+        'name' => 'API projection',
+        'company_id' => 42,
+        'secret' => 'not-readable',
+    ]);
+
+    pest_test_case()->getJson('/api/admin/resources/api-enabled-records')
+        ->assertOk()
+        ->assertJsonPath('data.0.company_id', 42)
+        ->assertJsonPath('data.0.default_status', 'database-default')
+        ->assertJsonMissingPath('data.0.secret');
+});
+
 it('unknown resource returns not found', function (): void {
     pest_test_case()->getJson('/api/admin/resources/unknown-resource')
         ->assertNotFound();
