@@ -4,13 +4,17 @@ Composer package: `seviaflow/api`
 
 Repository: `https://github.com/seviaflow/api`
 
+## Beta compatibility
+
+The free beta supports Laravel 12 on PHP 8.2+ and Laravel 13 on PHP 8.3+. Laravel 11 is outside this beta's support scope; its security support ended on March 12, 2026. CI covers these framework targets. Package unit tests use SQLite; the Northstar integration and browser suites use MariaDB 10.11. PostgreSQL is not yet a verified beta target.
+
 API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation. It requires Core, not Copilot or a licensing adapter.
 
 API does not require Livewire or `seviaflow/ui`. API is part of the free edition: no purchase, Hub activation or API entitlement is required at runtime. Authentication, authorization and throttling still apply.
 
 ## Installation Status
 
-SeviaFlow is pre-release and this repository currently declares `license: proprietary`. The source repository is not a public client download endpoint. The first stable tag and support scope remain owner decisions.
+SeviaFlow is pre-release. This package is licensed under the [MIT License](LICENSE), which permits commercial use, modification and redistribution with its copyright and license notice. Release tags, distribution endpoints and support scope are documented separately.
 
 ```bash
 composer require seviaflow/api:^0.1@dev
@@ -20,7 +24,7 @@ composer require seviaflow/api:^0.1@dev
 
 Remove `SEVIAFLOW_API_LICENSE_ENFORCE` and the obsolete `licensing` block from published API configuration. The legacy `seviaflow.api.license` middleware alias remains as a deprecated pass-through, so old configurations do not break. Do not remove host authentication, permissions or throttling. Only remove `seviaflow/licensing` if no other installed module (such as paid Copilot) needs it. Clear the host configuration and route caches after updating.
 
-No stable artifacts are published by this change. Price zero does not change the current proprietary license or make the private repository public.
+No stable artifacts are published by this change. The API package uses MIT; repository visibility and published artifacts remain separate release decisions.
 
 ## Routes
 
