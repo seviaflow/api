@@ -31,7 +31,7 @@ it('maps and roundtrips the bounded repeater API contract', function (): void {
     expect($schema['type'])->toBe('array')
         ->and($schema['items']['additionalProperties'])->toBeFalse()
         ->and($schema['x-seviaflow-repeater']['allowedItemTypes'])
-        ->toBe(['text', 'number', 'money', 'select', 'toggle']);
+        ->toBe(['text', 'number', 'money', 'select', 'toggle', 'textarea', 'date', 'datetime', 'time', 'email', 'url', 'phone', 'radio-group', 'color']);
 
     $payload = (new ApiPayloadSanitizer)->sanitizeForCreate(RepeaterApiResource::class, [
         'items' => '[{"label":"  Usługa  ","quantity":"2","amount":"12.50","kind":"service","enabled":"true"}]',

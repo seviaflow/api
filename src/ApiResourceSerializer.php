@@ -6,6 +6,7 @@ namespace SeviaFlow\Api;
 
 use Illuminate\Database\Eloquent\Model;
 use SeviaFlow\Core\Resources\ApiResource;
+use SeviaFlow\Core\Resources\Fields\BelongsToManyField;
 use SeviaFlow\Core\Resources\Fields\Field;
 use SeviaFlow\Core\Resources\Fields\RichTextField;
 use SeviaFlow\Core\Resources\Form;
@@ -37,6 +38,9 @@ final class ApiResourceSerializer
 
             $value = data_get($record, $field);
             $formField = $formFields[$field] ?? null;
+            if ($formField instanceof BelongsToManyField && $record instanceof Model) {
+                $value = $formField->valueForRecord($record);
+            }
             if ($formField instanceof RichTextField) {
                 $value = $formField->sanitizeForDisplay($value);
             }
