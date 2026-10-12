@@ -44,7 +44,7 @@ jobs:
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           SEVIAFLOW_REPO_TOKEN: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
           PRIVATE_DEPENDENCIES: |
-            seviaflow/core f8187fda0a6ac52aeac0a6e6ebb079429814c63f
+            seviaflow/core b4cfa5cecce21c6377b8eb1df9ec107caf25d5c0
         run: |
           set -euo pipefail
           if [[ -z "$SEVIAFLOW_REPO_TOKEN" ]]; then
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: seviaflow/core
-          ref: f8187fda0a6ac52aeac0a6e6ebb079429814c63f
+          ref: b4cfa5cecce21c6377b8eb1df9ec107caf25d5c0
           path: core
           token: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
 

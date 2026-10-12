@@ -126,6 +126,13 @@ final class ApiValidationRules
             )));
         }
 
+        foreach ($fieldRules as $key => $nestedRules) {
+            $root = explode('.', $key, 2)[0];
+            if ($key !== $root && in_array($root, $allowed, true) && ($presentFields === null || in_array($root, $presentFields, true))) {
+                $rules[$key] = $nestedRules;
+            }
+        }
+
         return $rules;
     }
 
