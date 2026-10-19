@@ -10,7 +10,7 @@ The free beta supports Laravel 12 on PHP 8.2+ and Laravel 13 on PHP 8.3+. Larave
 
 API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns API routes, resource serialization, CRUD responders, workflow endpoints and OpenAPI generation. It requires Core, not Copilot or a licensing adapter.
 
-API does not require Livewire or `seviaflow/ui`. API is part of the free edition: no purchase, Hub activation or API entitlement is required at runtime. Authentication, authorization and throttling still apply.
+API does not require Livewire or `seviaflow/ui`. It is part of the free edition and does not require paid API entitlement at runtime. Authentication, authorization and throttling still apply.
 
 ## Installation Status
 
