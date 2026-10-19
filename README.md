@@ -34,7 +34,7 @@ API does not require Livewire or `seviaflow/ui`. It is part of the free edition 
 
 This package is in beta and is licensed under the [MIT License](LICENSE). You may use, modify and redistribute it with the license notice. Beta APIs and compatibility may change before a stable release.
 
-After this package's beta tag is available on Packagist, install it with:
+Install the beta with Composer:
 
 ```bash
 composer require seviaflow/api:^0.1@beta
