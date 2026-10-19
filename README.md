@@ -1,8 +1,26 @@
-# SeviaFlow API
+<p align="center">
+  <img src="https://seviaflow.io/assets/img/seviaflow-logo.png" alt="SeviaFlow" width="240">
+</p>
 
-Composer package: `seviaflow/api`
+<h1 align="center">SeviaFlow API</h1>
 
-Repository: `https://github.com/seviaflow/api`
+<p align="center"><strong>Define your data once. Operate it everywhere.</strong></p>
+
+<p align="center">Expose SeviaFlow Resources through authenticated REST endpoints and generated OpenAPI documentation, while keeping Laravel authentication and policies in control.</p>
+
+<p align="center">
+  <a href="https://seviaflow.io/">Website</a> ·
+  <a href="https://seviaflow.io/docs/0.1/why-seviaflow">What is SeviaFlow?</a> ·
+  <a href="https://seviaflow.io/docs/0.1/api/">Documentation</a> ·
+  <a href="https://github.com/seviaflow/api">Source</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Beta release">
+  <img src="https://img.shields.io/badge/license-MIT-2563eb?style=flat-square" alt="MIT License">
+</p>
+
+<p align="center"><strong>Composer package:</strong> <code>seviaflow/api</code></p>
 
 ## Beta compatibility
 
@@ -12,12 +30,14 @@ API is the optional headless REST/OpenAPI adapter over `seviaflow/core`. It owns
 
 API does not require Livewire or `seviaflow/ui`. It is part of the free edition and does not require paid API entitlement at runtime. Authentication, authorization and throttling still apply.
 
-## Installation Status
+## Installation
 
-SeviaFlow is pre-release. This package is licensed under the [MIT License](LICENSE), which permits commercial use, modification and redistribution with its copyright and license notice. Release tags, distribution endpoints and support scope are documented separately.
+This package is in beta and is licensed under the [MIT License](LICENSE). You may use, modify and redistribute it with the license notice. Beta APIs and compatibility may change before a stable release.
+
+Install the beta with Composer:
 
 ```bash
-composer require seviaflow/api:^0.1@dev
+composer require seviaflow/api:^0.1@beta
 ```
 
 ## Upgrade from the former paid profile
@@ -55,7 +75,7 @@ write field lists do not expose POST/PATCH operations.
 
 ## Local Checks
 
-When testing this repository before Packagist registration, register a temporary local Core repository in your Composer root instead of committing a path repository:
+For local development against a Core checkout, register a temporary path repository in your Composer root; do not commit it:
 
 ```bash
 composer validate --strict

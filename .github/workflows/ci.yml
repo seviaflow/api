@@ -44,7 +44,7 @@ jobs:
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           SEVIAFLOW_REPO_TOKEN: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
           PRIVATE_DEPENDENCIES: |
-            seviaflow/core b4cfa5cecce21c6377b8eb1df9ec107caf25d5c0
+            seviaflow/core d09232a217603e3a070a739f4986d80a19edad78
         run: |
           set -euo pipefail
           if [[ -z "$SEVIAFLOW_REPO_TOKEN" ]]; then
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: seviaflow/core
-          ref: b4cfa5cecce21c6377b8eb1df9ec107caf25d5c0
+          ref: d09232a217603e3a070a739f4986d80a19edad78
           path: core
           token: ${{ secrets.SEVIAFLOW_REPO_TOKEN }}
 
@@ -118,7 +118,7 @@ jobs:
       - name: Resolve PHP dependencies with CI-only Core checkout
         working-directory: api
         run: |
-          composer config repositories.seviaflow-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"seviaflow/core":"0.1.x-dev"}}}'
+          composer config repositories.seviaflow-core '{"type":"path","url":"../core","options":{"symlink":false,"versions":{"seviaflow/core":"0.1.0-beta.1"}}}'
           composer update --no-interaction --prefer-dist
 
       - name: PHP quality gates
